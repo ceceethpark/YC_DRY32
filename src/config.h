@@ -50,7 +50,7 @@
 #define NTC_T0_K        298.15f   // 25℃ = 298.15K
 
 // ====== 공정 데이터 업로드 설정 ======
-#define ENABLE_API_UPLOAD         1                     // 1로 활성화 (5분 주기)
+#define ENABLE_API_UPLOAD         1                     // 1: MQTT 활성화 (경량 프로토콜)
 #define API_START_URL             "http://13.125.246.193/services/processStart"  // 공정 시작
 #define API_DATA_URL              "http://13.125.246.193/services/processData"   // 공정 데이터
 #define API_ENDPOINT_URL          "http://13.125.246.193/services/processData"   // 호환성
@@ -61,4 +61,4 @@
 #define API_MACHINE_ID            "1008"
 #define API_RECORD_ID             "1055"              // 필요 시 서버 요구사항에 맞게 변경
 #define API_DEPARTURE_YN          "N"                 // 대문자 N (Postman과 동일)
-#define API_UPLOAD_INTERVAL_MS    (1UL * 60UL * 1000UL) // 1분 주기 (60초)
+#define API_UPLOAD_INTERVAL_MS    (5UL * 60UL * 1000UL) // 1분 주기 (60초)

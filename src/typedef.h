@@ -71,6 +71,43 @@ typedef struct
 }MODE_TABLE;
 
 
+// 이벤트 비트 정의
+typedef struct {
+  uint8_t POWER_ON:1;
+  uint8_t HIGH_PLASMA_ALARM:1;
+  uint8_t HIGH_TEMPER_ALARM:1;
+  uint8_t LOW_TEMPER_ALARM:1;
+
+  uint8_t LOW_HUMIDITY_ALARM:1;
+  uint8_t TEMPERATURE_SENSOR_ALARM:1;
+  uint8_t COMP_CURRENT_ALARM:1;
+  uint8_t EVAFAN_CURRENT_ALARM:1;
+
+  uint8_t EVAHEATER_CURRENT_ALARM:1;
+  uint8_t ICE_ALARM:1;
+  uint8_t OCR_ALARM:1;
+  uint8_t EVAHEATER_HTC_ALARM:1;
+
+  uint8_t SUPER_COOL_ALARM:1;
+  uint8_t CHANGGO_OPEN_DOOR:1;
+  uint8_t JAESANG_ON:1;
+  uint8_t NO_SENSOR_EVENT:1;
+}EVENT_BIT;
+
+typedef union _UNION_EVENT
+{
+  EVENT_BIT bEvent;
+  uint16_t u16;
+}UNION_EVENT;
+
+typedef struct _PUBLISH_EVENT
+{
+  UNION_EVENT uEvent;
+  UNION_EVENT ex_uEvent;
+  UNION_EVENT xor_uEvent;
+  uint16_t event_state;
+}PUBLISH_EVENT;
+
 typedef struct
 {
   uint8_t auto_damper;
@@ -100,4 +137,5 @@ typedef struct
   bCTRL ctrl;
   bFLAG flg;
   ERROR_INFO error_info;
+  PUBLISH_EVENT pubEvent;  // 이벤트 상태
 }CURRENT_DATA;

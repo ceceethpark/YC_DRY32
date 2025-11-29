@@ -8,7 +8,7 @@
 #include "typedef.h"
 #include "dataClass/dataClass.h"
 #include "TM1638Display/TM1638Display.h"
-#include "updateAPI/updateAPI.h"
+#include "mqtt/mqttClient.h"
 
 // ========== 전역 변수 ==========
 uint64_t gChipID = 0;            // ESP32 Chip ID (MAC 기반 고유 ID)
@@ -21,7 +21,7 @@ uint16_t running_seconds = 0;    // 운전 경과 시간 (초)
 // ========== 전역 객체 ==========
 dataClass gData;
 TM1638Display gDisplay(PIN_FND_STB, PIN_FND_CLK, PIN_FND_DIO, FND_BRIGHTNESS);
-UpdateAPI gUpdateAPI;
+// MQTT 클라이언트는 mqttClient.cpp에서 정의됨
 
 // ========== 타이머 인터럽트 변수 ==========
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -203,23 +203,22 @@ void setup() {
   // WiFi 연결
   connectWiFi();
   
-  // UpdateAPI 초기화 (FreeRTOS Task 방식)
-  gUpdateAPI.begin();
+  // MQTT 클라이언트 초기화
+  gMQTTClient.begin();
+  
+  // 시스템 시작 이벤트 발행 (Power-On)
+  delay(2000);  // MQTT 연결 대기
+  if (gMQTTClient.isConnected()) {
+    // Power-On 이벤트 설정
+    gCUR.pubEvent.uEvent.u16 = 0x0001;  // POWER_ON 비트
+    gCUR.pubEvent.ex_uEvent.u16 = 0x0000;
+    gCUR.pubEvent.xor_uEvent.u16 = 0x0001;  // 변경된 비트
+    gMQTTClient.publishEvent(gCUR.pubEvent.xor_uEvent.u16, gCUR.pubEvent.uEvent.u16);
+  }
   
   // OTA 설정
   if (WiFi.status() == WL_CONNECTED) {
     setupOTA();
-    
-    // 공정 시작 API 호출 (record_id 받아오기)
-    #if ENABLE_API_UPLOAD
-    delay(2000);  // WiFi 안정화 대기
-    Serial.println("[Setup] Calling processStart to get record_id...");
-    if (gUpdateAPI.processStart()) {
-      Serial.println("[Setup] processStart success! Ready to send data.");
-    } else {
-      Serial.println("[Setup] processStart failed. Will retry later.");
-    }
-    #endif
   }
   
   // 타이머/인터럽트 시작
@@ -261,18 +260,21 @@ void loop() {
     gData.onMinuteElapsed();
   }
   
-  // API 업로드 (5분 주기) - processStart()로 record_id를 받아온 후 공정데이터 전송
+  // MQTT loop (재연결 처리 및 메시지 처리)
+  gMQTTClient.loop();
+  
+  // MQTT 데이터 전송 (1분 주기)
   #if ENABLE_API_UPLOAD
-  static unsigned long lastUploadTime = 0;
+  static unsigned long lastPublishTime = 0;
   unsigned long currentTime = millis();
   
-  if (currentTime - lastUploadTime >= API_UPLOAD_INTERVAL_MS) {
-    lastUploadTime = currentTime;
+  if (currentTime - lastPublishTime >= API_UPLOAD_INTERVAL_MS) {
+    lastPublishTime = currentTime;
     
     float tempC = gData.readNTCtempC();
     if (!isnan(tempC)) {
-      gUpdateAPI.queueUpload((int)tempC, API_DEPARTURE_YN);
-      Serial.printf("[API] Queued upload: temp=%.1f°C\n", tempC);
+      int elapsedMinutes = running_seconds / 60;
+      gMQTTClient.publishData(tempC, elapsedMinutes);
     }
   }
   #endif
