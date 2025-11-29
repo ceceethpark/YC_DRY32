@@ -212,49 +212,49 @@ void setup() {
   Serial.println("===========================================\n");
 }
 
-// ========== 버튼 처리 ==========
-void handleButtons() {
-  static bool lastPwrSwState = HIGH;
-  static unsigned long lastDebounceTime = 0;
-  const unsigned long debounceDelay = 50;
+// // ========== 버튼 처리 ==========
+// void handleButtons() {
+//   static bool lastPwrSwState = HIGH;
+//   static unsigned long lastDebounceTime = 0;
+//   const unsigned long debounceDelay = 50;
   
-  bool currentPwrSwState = digitalRead(PIN_PWR_SW);
+//   bool currentPwrSwState = digitalRead(PIN_PWR_SW);
   
-  // 디바운싱
-  if (currentPwrSwState != lastPwrSwState) {
-    lastDebounceTime = millis();
-  }
+//   // 디바운싱
+//   if (currentPwrSwState != lastPwrSwState) {
+//     lastDebounceTime = millis();
+//   }
   
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    // 버튼이 눌렸을 때 (LOW)
-    if (currentPwrSwState == LOW && lastPwrSwState == HIGH) {
-      // 운전 시작/정지 토글
-      system_running = !system_running;
+//   if ((millis() - lastDebounceTime) > debounceDelay) {
+//     // 버튼이 눌렸을 때 (LOW)
+//     if (currentPwrSwState == LOW && lastPwrSwState == HIGH) {
+//       // 운전 시작/정지 토글
+//       system_running = !system_running;
       
-      if (system_running) {
-        Serial.println("=== START ===");
-        running_seconds = 0;
-        gCUR.total_remain_minute = set_time_minutes;
-        gCUR.ctrl.fan = 1;
-        digitalWrite(PIN_FAN, HIGH);
-        digitalWrite(PIN_BEEP, HIGH);
-        delay(100);
-        digitalWrite(PIN_BEEP, LOW);
-      } else {
-        Serial.println("=== STOP ===");
-        gCUR.ctrl.heater = 0;
-        gCUR.ctrl.fan = 0;
-        digitalWrite(PIN_HEATER, LOW);
-        digitalWrite(PIN_FAN, LOW);
-        digitalWrite(PIN_BEEP, HIGH);
-        delay(200);
-        digitalWrite(PIN_BEEP, LOW);
-      }
-    }
-  }
+//       if (system_running) {
+//         Serial.println("=== START ===");
+//         running_seconds = 0;
+//         gCUR.total_remain_minute = set_time_minutes;
+//         gCUR.ctrl.fan = 1;
+//         digitalWrite(PIN_FAN, HIGH);
+//         digitalWrite(PIN_BEEP, HIGH);
+//         delay(100);
+//         digitalWrite(PIN_BEEP, LOW);
+//       } else {
+//         Serial.println("=== STOP ===");
+//         gCUR.ctrl.heater = 0;
+//         gCUR.ctrl.fan = 0;
+//         digitalWrite(PIN_HEATER, LOW);
+//         digitalWrite(PIN_FAN, LOW);
+//         digitalWrite(PIN_BEEP, HIGH);
+//         delay(200);
+//         digitalWrite(PIN_BEEP, LOW);
+//       }
+//     }
+//   }
   
-  lastPwrSwState = currentPwrSwState;
-}
+//   lastPwrSwState = currentPwrSwState;
+// }
 
 // ========== loop ==========
 void loop() {

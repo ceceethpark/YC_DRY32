@@ -294,82 +294,6 @@ uint8_t TM1638Display::receive()
   return temp;
 }
 
-
-uint8_t TM1638Display::getButtons(void)
-{
-
-  KEY_BUF key_buf;
-  uint8_t key=KEY_NULL;
-///////////////////////////////////
-  digitalWrite(_pinSTB, LOW);
-  writeByte(0x42);
-  pinMode(_pinDIO, INPUT);  // 외부 풀업 사용
-  delayMicroseconds(50);
-  
-  for (int i = 0; i < 4; i++) {
-    key_buf.data[i] = receive();
-  }
-  
-  pinMode(_pinDIO, OUTPUT);
-  digitalWrite(_pinSTB, HIGH);
-///////////////////////////////////
-  // 각 바이트의 비트를 확인하여 키 결정
-  uint32_t all_bits = (key_buf.data[3] << 24) | (key_buf.data[2] << 16) | (key_buf.data[1] << 8) | key_buf.data[0];
-  
-  // 모든 키 데이터 출력 (디버그)
-  static uint8_t last_key0=0, last_key1=0, last_key2=0, last_key3=0;
-  if(key_buf.data[0] != last_key0 || key_buf.data[1] != last_key1 || 
-     key_buf.data[2] != last_key2 || key_buf.data[3] != last_key3) {
-    if(key_buf.data[0] || key_buf.data[1] || key_buf.data[2] || key_buf.data[3]) {
-      printf(">>> KEY: %02X %02X %02X %02X (bits: ", key_buf.data[0], key_buf.data[1], key_buf.data[2], key_buf.data[3]);
-      // 어떤 비트가 켜졌는지 출력
-      for(int i=0; i<32; i++) {
-        if(all_bits & (1 << i)) printf("b%d ", i);
-      }
-      printf(")\r\n");
-    }
-    last_key0 = key_buf.data[0];
-    last_key1 = key_buf.data[1];
-    last_key2 = key_buf.data[2];
-    last_key3 = key_buf.data[3];
-  }
-  
-  // 실제 하드웨어 매핑에 따라 수정
-  // TIME_DN: 0x02 (b1), TIME_UP: 0x20 (b5)
-  // 나머지 키들은 실제 테스트 필요
-  
-  if(key_buf.b.b1){  // 0x02
-    key=KEY_TIME_DN;
-  }
-  if(key_buf.b.b5){  // 0x20
-    key=KEY_TIME_UP;
-  }
-  if(key_buf.b.b6){  // 0x40 예상
-    key=KEY_TEMP_DN;
-  }
-  if(key_buf.b.b2){  // 0x04 예상
-    key=KEY_TEMP_UP;
-  }
-  if(key_buf.b.b9){  // DAMPER 키 (b0은 노이즈)
-     key=KEY_DAMPER;
-  }
-//  if(key_buf.b.b10){
-//    key=KEY_MODE;
-//    //printf("#6\r\n");
-//  }
-#if 1
-
-  //tempup/tempdn/timedn
-  if(key_buf.b.b6 && key_buf.b.b2 && key_buf.b.b18){
-    key=KEY_123;
-    printf("#KEY_123\r\n");
-  }
-  // PWR_KEY는 이제 하드웨어 스위치(PIN_PWR_SW)로 처리됨
- #endif 
-  return key;
-}
-
-
 bool TM1638Display::getBit(uint8_t pos, uint8_t bit) {
   return (_displaySegment[pos] >> bit) & 0x01;
 }
@@ -536,6 +460,28 @@ void TM1638Display::beep() {
 }
 
 //=============================================
+// 전원 버튼 처리 함수 (디바운싱 없음)
+void TM1638Display::processPowerButton() {
+  static uint8_t last_pwr_state = HIGH;  // 이전 상태 저장
+  
+  uint8_t current_pwr_state = digitalRead(PIN_PWR_SW);
+  
+  // 상태 변화 감지 (HIGH -> LOW 또는 LOW -> HIGH)
+  if (current_pwr_state != last_pwr_state) {
+    if (current_pwr_state == LOW) {
+      // 버튼 눌림 (LOW): 파워 ON
+      gCUR.flg.soft_off = 0;
+      printf("Power Button: ON\n");
+    } else {
+      // 버튼 떼짐 (HIGH): 파워 OFF
+      gCUR.flg.soft_off = 1;
+      printf("Power Button: OFF\n");
+    }
+    last_pwr_state = current_pwr_state;
+  }
+}
+
+//=============================================
 void  TM1638Display::key_process(){
   static uint8_t ex_key=0;
   static uint16_t key_press_cnt=0;
@@ -694,4 +640,89 @@ void  TM1638Display::key_process(){
 #ifdef DEBUG
  // printf("--key_process key[%d] key_press[%d]\r\n", key, key_press);
 #endif
+}
+
+
+#define ADC_SENSITIVITY 0.01f
+float TM1638Display::get_m0_filter(int adc)
+{
+  static float m0_value;
+  m0_value=(m0_value*(1-ADC_SENSITIVITY))+(adc*ADC_SENSITIVITY);
+  return m0_value;
+}
+
+uint8_t TM1638Display::getButtons(void)
+{
+  // 전원 버튼 처리 (디바운싱 없음)
+  processPowerButton();
+  avr_NTC1 = (int)get_m0_filter(analogRead(PIN_NTC1)); 
+  KEY_BUF key_buf;
+  uint8_t key=KEY_NULL;
+///////////////////////////////////
+  digitalWrite(_pinSTB, LOW);
+  writeByte(0x42);
+  pinMode(_pinDIO, INPUT);  // 외부 풀업 사용
+  delayMicroseconds(50);
+  
+  for (int i = 0; i < 4; i++) {
+    key_buf.data[i] = receive();
+  }
+  
+  pinMode(_pinDIO, OUTPUT);
+  digitalWrite(_pinSTB, HIGH);
+///////////////////////////////////
+  // 각 바이트의 비트를 확인하여 키 결정
+  uint32_t all_bits = (key_buf.data[3] << 24) | (key_buf.data[2] << 16) | (key_buf.data[1] << 8) | key_buf.data[0];
+  
+  // 모든 키 데이터 출력 (디버그)
+  static uint8_t last_key0=0, last_key1=0, last_key2=0, last_key3=0;
+  if(key_buf.data[0] != last_key0 || key_buf.data[1] != last_key1 || 
+     key_buf.data[2] != last_key2 || key_buf.data[3] != last_key3) {
+    if(key_buf.data[0] || key_buf.data[1] || key_buf.data[2] || key_buf.data[3]) {
+      printf(">>> KEY: %02X %02X %02X %02X (bits: ", key_buf.data[0], key_buf.data[1], key_buf.data[2], key_buf.data[3]);
+      // 어떤 비트가 켜졌는지 출력
+      for(int i=0; i<32; i++) {
+        if(all_bits & (1 << i)) printf("b%d ", i);
+      }
+      printf(")\r\n");
+    }
+    last_key0 = key_buf.data[0];
+    last_key1 = key_buf.data[1];
+    last_key2 = key_buf.data[2];
+    last_key3 = key_buf.data[3];
+  }
+  
+  // 실제 하드웨어 매핑에 따라 수정
+  // TIME_DN: 0x02 (b1), TIME_UP: 0x20 (b5)
+  // 나머지 키들은 실제 테스트 필요
+  
+  if(key_buf.b.b1){  // 0x02
+    key=KEY_TIME_DN;
+  }
+  if(key_buf.b.b5){  // 0x20
+    key=KEY_TIME_UP;
+  }
+  if(key_buf.b.b6){  // 0x40 예상
+    key=KEY_TEMP_DN;
+  }
+  if(key_buf.b.b2){  // 0x04 예상
+    key=KEY_TEMP_UP;
+  }
+  if(key_buf.b.b9){  // DAMPER 키 (b0은 노이즈)
+     key=KEY_DAMPER;
+  }
+//  if(key_buf.b.b10){
+//    key=KEY_MODE;
+//    //printf("#6\r\n");
+//  }
+#if 1
+
+  //tempup/tempdn/timedn
+  if(key_buf.b.b6 && key_buf.b.b2 && key_buf.b.b18){
+    key=KEY_123;
+    printf("#KEY_123\r\n");
+  }
+  // PWR_KEY는 이제 하드웨어 스위치(PIN_PWR_SW)로 처리됨
+ #endif 
+  return key;
 }

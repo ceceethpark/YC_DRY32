@@ -107,10 +107,12 @@ public:
   void displayTime(uint16_t minute);
   // 온도 2개 표시 (현재온도, 설정온도)
   void displayDualTemp(uint16_t temp, uint16_t setTemp);
-  
   void key_process();
-   void sendToDisplay();// 전체 디스플레이 업데이트
+  void sendToDisplay();// 전체 디스플레이 업데이트
   void beep();  // 부저 소리 (50ms)
+  void processPowerButton();  // 전원 버튼 처리 (디바운싱 없음)
+  int  avr_NTC1=0;
+
 private:
   uint8_t _pinSTB;
   uint8_t _pinCLK;
@@ -138,4 +140,6 @@ private:
   void displaySegments(uint8_t segment, uint16_t digit);
   void setString(uint8_t pos, const char* string, uint8_t len);
   uint8_t getButtons(void);
+  //int analogReadAndFilter_ntc1(int adcPin);
+  float get_m0_filter(int adc);
 };

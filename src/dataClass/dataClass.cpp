@@ -2,9 +2,11 @@
 
 #include "dataClass.h"
 #include "../config.h"  // DEBUG_MODE 매크로 정의
+#include "../TM1638Display/TM1638Display.h"
 
 // 전역 변수 정의
 CURRENT_DATA gCUR;
+extern TM1638Display gDisplay;
 
 dataClass::dataClass() {
     clear();
@@ -15,6 +17,11 @@ dataClass::dataClass() {
     _last_filtered_temp = 0.0f;
     _temp_initialized = false;
     memset(_temp_buffer, 0, sizeof(_temp_buffer));
+    
+    // ADC raw 필터링 초기화
+    _adc_buffer_idx = 0;
+    _adc_initialized = false;
+    memset(_adc_buffer, 0, sizeof(_adc_buffer));
     
     // 팬 지연 제어 초기화
     _cooling_mode = false;
@@ -102,37 +109,7 @@ void dataClass::clearFlash() {
 
 // 온도 측정 및 필터링
 void dataClass::measureAndFilterTemp() {
-    // 온도 측정 (NTC1 핀 사용)
-    const int NTC_PIN = 36;  // PIN_NTC1
-    float raw_temp = readNTCtempC(NTC_PIN);
-    
-    // 이동 평균 필터 (10개 샘플)
-    _temp_buffer[_temp_buffer_idx] = raw_temp;
-    _temp_buffer_idx = (_temp_buffer_idx + 1) % 10;
-    
-    // 평균 계산
-    float sum = 0.0f;
-    for (int i = 0; i < 10; i++) {
-        sum += _temp_buffer[i];
-    }
-    float avg_temp = sum / 10.0f;
-    
-    // 급격한 변화 방지 (변화율 제한: 최대 ±2℃/초)
-    if (_temp_initialized) {
-        float delta = avg_temp - _last_filtered_temp;
-        if (delta > 2.0f) {
-            avg_temp = _last_filtered_temp + 2.0f;
-        } else if (delta < -2.0f) {
-            avg_temp = _last_filtered_temp - 2.0f;
-        }
-    } else {
-        // 첫 10초간 버퍼 채우기
-        _temp_initialized = true;
-    }
-    
-    _last_filtered_temp = avg_temp;
-    gCUR.measure_ntc_temp = avg_temp;
-    
+    gCUR.measure_ntc_temp = readNTCtempC();
     // printf("Temp: raw=%.2f, filtered=%.2f\n", raw_temp, avg_temp);
 }
 
@@ -342,11 +319,8 @@ void dataClass::onMinuteElapsed() {
 
 // NTC 온도 변환 (Steinhart-Hart 근사)
 // 5K NTC (Beta=3970), 5K pull-up, 3.3V
-float dataClass::readNTCtempC(int adcPin) {
-    int raw = analogRead(adcPin);    // 0~4095 (12-bit ADC)
-    if (raw <= 0) raw = 1;
-    if (raw >= 4095) raw = 4094;
-
+float dataClass::readNTCtempC() {
+   int raw =gDisplay.avr_NTC1;
     // ADC 전압 계산 (ESP32 ADC는 3.3V 기준)
     float vADC = (float)raw * 3.3f / 4095.0f;
     

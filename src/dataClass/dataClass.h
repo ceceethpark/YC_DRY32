@@ -23,7 +23,7 @@ public:
     void clear();
     
     // NTC 온도 읽기
-    float readNTCtempC(int adcPin);
+    float readNTCtempC();
     
     // Flash 저장/로드
     void saveToFlash();
@@ -55,6 +55,11 @@ private:
     uint8_t _temp_buffer_idx;
     float _last_filtered_temp;
     bool _temp_initialized;
+    
+    // ADC raw 값 필터링용
+    int _adc_buffer[10];     // ADC raw 이동 평균 버퍼
+    uint8_t _adc_buffer_idx; // ADC 버퍼 인덱스
+    bool _adc_initialized;   // ADC 버퍼 초기화 플래그
     
     // 팬 지연 제어용
     bool _cooling_mode;           // 냉각 모드 플래그
