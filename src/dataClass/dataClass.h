@@ -34,6 +34,9 @@ public:
     void onSecondElapsed();
     void onMinuteElapsed();
     
+    // API 업로드 트리거
+    void triggerAPIUpload(int measureValue, const char* departureYn = "N");
+    
     // 온도 측정 및 필터링
     void measureAndFilterTemp();
     

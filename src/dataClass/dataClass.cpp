@@ -3,6 +3,7 @@
 #include "dataClass.h"
 #include "../config.h"  // DEBUG_MODE 매크로 정의
 #include "../TM1638Display/TM1638Display.h"
+#include "../updateAPI/updateAPI.h"
 
 // 전역 변수 정의
 CURRENT_DATA gCUR;
@@ -279,8 +280,19 @@ void dataClass::checkOverheat() {
     }
 }
 
+// API 업로드 트리거 (외부에서 호출)
+void dataClass::triggerAPIUpload(int measureValue, const char* departureYn) {
+    // 이 함수는 main.cpp에서 호출됩니다
+    // UpdateAPI 클래스와 직접 연결하지 않음 (부팅 루프 방지)
+    (void)measureValue;
+    (void)departureYn;
+    // 실제 업로드는 main.cpp에서 처리
+}
+
+
 // 분 단위 콜백
 void dataClass::onMinuteElapsed() {
+
     // 냉각 모드 처리
     if (_cooling_mode) {
         if (_cooling_minutes > 0) {

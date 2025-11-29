@@ -20,6 +20,7 @@ uint16_t running_seconds = 0;    // 운전 경과 시간 (초)
 // ========== 전역 객체 ==========
 dataClass gData;
 TM1638Display gDisplay(PIN_FND_STB, PIN_FND_CLK, PIN_FND_DIO, FND_BRIGHTNESS);
+UpdateAPI gUpdateAPI;
 
 // ========== 타이머 인터럽트 변수 ==========
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -197,6 +198,9 @@ void setup() {
   // WiFi 연결
   connectWiFi();
   
+  // UpdateAPI 초기화 (FreeRTOS Task 방식)
+  gUpdateAPI.begin();
+  
   // OTA 설정
   if (WiFi.status() == WL_CONNECTED) {
     setupOTA();
@@ -284,30 +288,11 @@ void loop() {
     // 1분 콜백 실행
     gData.onMinuteElapsed();
     
-    // API 업로드 (활성화 시)
-    #if ENABLE_API_UPLOAD
-    static unsigned long lastUpload = 0;
-    if (millis() - lastUpload >= API_UPLOAD_INTERVAL_MS) {
-      lastUpload = millis();
-      
-      // 데이터 준비 및 전송
-      int temp = (int)gCUR.measure_ntc_temp;
-      int humidity = 50;  // 예시값
-      int remainMin = gCUR.total_remain_minute;
-      
-      bool success = uploadProcessData(
-        API_PRODUCT_ID, API_PARTNER_ID, API_MACHINE_ID,
-        API_RECORD_ID, API_DEPARTURE_YN,
-        temp, humidity, remainMin
-      );
-      
-      if (success) {
-        Serial.println("API upload success");
-      } else {
-        Serial.println("API upload failed");
-      }
+    // API 업로드 (FreeRTOS Task에 큐잉)
+    float tempC = gData.readNTCtempC();
+    if (!isnan(tempC)) {
+      gUpdateAPI.queueUpload((int)tempC, API_DEPARTURE_YN);
     }
-    #endif
   }
   
   delay(10);  // CPU 부하 감소
