@@ -1,0 +1,69 @@
+// dataClass.h - 데이터 관리 클래스
+
+#ifndef DATACLASS_H
+#define DATACLASS_H
+
+#include <Arduino.h>
+#include <Preferences.h>
+#include "../typedef.h"
+
+// 전역 변수 선언
+extern CURRENT_DATA gCUR;
+
+class dataClass {
+public:
+    dataClass();
+    
+    // 데이터 접근 메서드
+    void setData(uint8_t index, uint16_t value);
+    uint16_t getData(uint8_t index);
+    
+    // 초기화
+    void begin();
+    void clear();
+    
+    // NTC 온도 읽기
+    float readNTCtempC(int adcPin);
+    
+    // Flash 저장/로드
+    void saveToFlash();
+    void loadFromFlash();
+    void clearFlash();
+    
+    // 콜백 함수
+    void onSecondElapsed();
+    void onMinuteElapsed();
+    
+    // 온도 측정 및 필터링
+    void measureAndFilterTemp();
+    
+    // 히터 온도 제어
+    void controlHeater();
+    
+    // 팬 전류 감시
+    void checkFanCurrent();
+    
+    // 과열 감지 (PIN_OH)
+    void checkOverheat();
+    
+private:
+    uint16_t _data[16];  // 데이터 배열
+    Preferences _preferences;  // Flash 저장용
+    
+    // 온도 필터링용
+    float _temp_buffer[10];  // 이동 평균 버퍼
+    uint8_t _temp_buffer_idx;
+    float _last_filtered_temp;
+    bool _temp_initialized;
+    
+    // 팬 지연 제어용
+    bool _cooling_mode;           // 냉각 모드 플래그
+    uint16_t _cooling_minutes;    // 냉각 남은 시간 (분)
+    bool _fan_started;            // 팬 시작 플래그
+    uint16_t _fan_start_delay;    // 팬 시작 지연 카운터 (초)
+    
+    // 팬 전류 감시용
+    uint16_t _fan_error_count;    // 팬 에러 카운터
+};
+
+#endif // DATACLASS_H
