@@ -22,16 +22,55 @@ dataClass gData;
 TM1638Display gDisplay(PIN_FND_STB, PIN_FND_CLK, PIN_FND_DIO, FND_BRIGHTNESS);
 
 // ========== 타이머 인터럽트 변수 ==========
-hw_timer_t *timer1sec = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-volatile bool flag_1sec = false;
+volatile uint16_t zc_count = 0;        // Zero-cross 카운터 (0~119) 또는 타이머 카운터
+volatile uint8_t second_counter = 0;   // 초 카운터 (0~59)
+volatile bool flag_1sec = false;       // 1초 플래그
+volatile bool flag_1min = false;       // 1분 플래그
 
-// ========== 타이머 인터럽트 핸들러 ==========
+#ifdef DEBUG_MODE
+// ========== DEBUG: 내부 타이머 인터럽트 핸들러 (1초 주기) ==========
+hw_timer_t *timer1sec = NULL;
+
 void IRAM_ATTR onTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
+  
+  // 1초 플래그 설정
   flag_1sec = true;
+  
+  // 1분 카운터 증가
+  second_counter++;
+  if (second_counter >= 60) {
+    second_counter = 0;
+    flag_1min = true;
+  }
+  
   portEXIT_CRITICAL_ISR(&timerMux);
 }
+#else
+// ========== RELEASE: Zero-Cross 인터럽트 핸들러 (AC 60Hz) ==========
+// 60Hz AC -> 120 zero-cross/sec (양방향)
+void IRAM_ATTR onZeroCross() {
+  portENTER_CRITICAL_ISR(&timerMux);
+  
+  zc_count++;
+  
+  // 120번 카운트 = 1초
+  if (zc_count >= 120) {
+    zc_count = 0;
+    flag_1sec = true;
+    
+    // 1분 카운터 증가
+    second_counter++;
+    if (second_counter >= 60) {
+      second_counter = 0;
+      flag_1min = true;
+    }
+  }
+  
+  portEXIT_CRITICAL_ISR(&timerMux);
+}
+#endif
 
 // ========== WiFi 연결 ==========
 void connectWiFi() {
@@ -116,13 +155,21 @@ void initPins() {
   digitalWrite(PIN_BEEP, LOW);
 }
 
-// ========== 타이머 초기화 (1초 주기) ==========
-void initTimer() {
+// ========== 타이머/인터럽트 초기화 ==========
+void initTimerInterrupt() {
+#ifdef DEBUG_MODE
+  // DEBUG 모드: 내부 타이머 사용 (1초 주기)
   timer1sec = timerBegin(0, 80, true);  // 80MHz / 80 = 1MHz
   timerAttachInterrupt(timer1sec, &onTimer, true);
   timerAlarmWrite(timer1sec, 1000000, true);  // 1초 = 1,000,000 μs
   timerAlarmEnable(timer1sec);
-  Serial.println("Timer initialized (1 sec)");
+  Serial.println("DEBUG MODE: Internal timer initialized (1 sec)");
+#else
+  // RELEASE 모드: Zero-Cross 인터럽트 사용 (AC 60Hz)
+  pinMode(PIN_ZCIRQ, INPUT);
+  attachInterrupt(digitalPinToInterrupt(PIN_ZCIRQ), onZeroCross, CHANGE);
+  Serial.println("RELEASE MODE: Zero-Cross interrupt initialized (AC 60Hz -> 120 pulses/sec)");
+#endif
 }
 
 // ========== setup ==========
@@ -144,6 +191,9 @@ void setup() {
   // dataClass 초기화
   gData.begin();
   
+  // Flash에서 설정값 로드 (온도, 시간, 댐퍼 모드)
+  gData.loadFromFlash();
+  
   // WiFi 연결
   connectWiFi();
   
@@ -152,11 +202,13 @@ void setup() {
     setupOTA();
   }
   
-  // 타이머 시작
-  initTimer();
+  // 타이머/인터럽트 시작
+  initTimerInterrupt();
   
   Serial.println("Setup complete!");
-  Serial.printf("Default: Temp=%d°C, Time=%dmin\n", set_temperature, set_time_minutes);
+  Serial.printf("Loaded: Temp=%d°C, Time=%dmin, Damper=%s\n", 
+                gCUR.seljung_temp, gCUR.current_minute, 
+                gCUR.auto_damper ? "AUTO" : "MANUAL");
   Serial.println("===========================================\n");
 }
 
@@ -204,159 +256,58 @@ void handleButtons() {
   lastPwrSwState = currentPwrSwState;
 }
 
-// ========== 디스플레이 업데이트 ==========
-// void updateDisplay() {
-//   static uint8_t displayMode = 0;  // 0: 온도, 1: 시간
-//   static int blinkCount = 0;
-  
-//   if (system_running) {
-//     // 운전 중: 교대로 온도/시간 표시
-//     blinkCount++;
-//     if (blinkCount >= 3) {  // 3초마다 전환
-//       blinkCount = 0;
-//       displayMode = !displayMode;
-//     }
-    
-//     if (displayMode == 0) {
-//       // 현재 온도 표시 (예: 45.2℃)
-//       int tempX10 = (int)(gCUR.measure_ntc_temp * 10.0f);
-//       gDisplay.setNumber(0, tempX10, 1);  // 소수점 1자리
-//       gDisplay.setDot(2, true);  // 소수점 표시
-//     } else {
-//       // 남은 시간 표시 (분)
-//       gDisplay.setNumber(0, gCUR.total_remain_minute, 0);
-//     }
-//   } else {
-//     // 대기 중: 설정 온도 표시
-//     gDisplay.setNumber(0, set_temperature, 0);
-//   }
-// }
-
 // ========== loop ==========
 void loop() {
   // OTA 핸들링
   ArduinoOTA.handle();
   
-  // 버튼 입력 처리
- // handleButtons();
+  // 키 입력 및 디스플레이 처리
   gDisplay.key_process();
   gDisplay.sendToDisplay();
-
+  
   // 1초마다 실행
   if (flag_1sec) {
     portENTER_CRITICAL(&timerMux);
     flag_1sec = false;
     portEXIT_CRITICAL(&timerMux);
     
-    // dataClass 1초 주기 처리
+    // 1초 콜백 실행
     gData.onSecondElapsed();
+  }
+  
+  // 1분마다 실행
+  if (flag_1min) {
+    portENTER_CRITICAL(&timerMux);
+    flag_1min = false;
+    portEXIT_CRITICAL(&timerMux);
     
-    // 온도 측정 및 필터링
-    gData.measureAndFilterTemp();
+    // 1분 콜백 실행
+    gData.onMinuteElapsed();
     
-    // 운전 중일 때만 제어
-    if (system_running) {
-      running_seconds++;
+    // API 업로드 (활성화 시)
+    #if ENABLE_API_UPLOAD
+    static unsigned long lastUpload = 0;
+    if (millis() - lastUpload >= API_UPLOAD_INTERVAL_MS) {
+      lastUpload = millis();
       
-      // 1분마다 남은 시간 감소
-      if (running_seconds % 60 == 0 && gCUR.total_remain_minute > 0) {
-        gCUR.total_remain_minute--;
-        
-        // 시간 종료 체크
-        if (gCUR.total_remain_minute == 0) {
-          Serial.println("=== FINISH ===");
-          system_running = false;
-          gCUR.ctrl.heater = 0;
-          gCUR.ctrl.fan = 0;
-          digitalWrite(PIN_HEATER, LOW);
-          digitalWrite(PIN_FAN, LOW);
-          
-          // 완료 부저
-          for (int i = 0; i < 3; i++) {
-            digitalWrite(PIN_BEEP, HIGH);
-            delay(200);
-            digitalWrite(PIN_BEEP, LOW);
-            delay(200);
-          }
-        }
-      }
+      // 데이터 준비 및 전송
+      int temp = (int)gCUR.measure_ntc_temp;
+      int humidity = 50;  // 예시값
+      int remainMin = gCUR.total_remain_minute;
       
-      // 히터 제어 (온도 기반)
-      if (gCUR.measure_ntc_temp < set_temperature - 2.0) {
-        // 온도가 낮으면 히터 ON
-        if (gCUR.ctrl.heater == 0) {
-          gCUR.ctrl.heater = 1;
-          digitalWrite(PIN_HEATER, HIGH);
-        }
-      } else if (gCUR.measure_ntc_temp >= set_temperature) {
-        // 설정 온도에 도달하면 히터 OFF
-        if (gCUR.ctrl.heater == 1) {
-          gCUR.ctrl.heater = 0;
-          digitalWrite(PIN_HEATER, LOW);
-        }
-      }
-    }
-    
-    // 과열 체크 (항상)
-    gData.checkOverheat();
-    
-    // 팬 전류 체크 (운전 중일 때만)
-    if (system_running) {
-      gData.checkFanCurrent();
-    }
-    
-    // 디스플레이 업데이트
-    //updateDisplay();
-    
-    // 1분마다 처리
-    static int secondCount = 0;
-    secondCount++;
-    if (secondCount >= 60) {
-      secondCount = 0;
-      gData.onMinuteElapsed();
-      
-      // API 업로드 (활성화 시)
-      #if ENABLE_API_UPLOAD
-      static unsigned long lastUpload = 0;
-      if (millis() - lastUpload >= API_UPLOAD_INTERVAL_MS) {
-        lastUpload = millis();
-        
-        // 데이터 준비 및 전송
-        int temp = (int)gCUR.measure_ntc_temp;
-        int humidity = 50;  // 예시값
-        int remainMin = gCUR.total_remain_minute;
-        
-        bool success = uploadProcessData(
-          API_PRODUCT_ID, API_PARTNER_ID, API_MACHINE_ID,
-          API_RECORD_ID, API_DEPARTURE_YN,
-          temp, humidity, remainMin
-        );
-        
-        if (success) {
-          Serial.println("API upload success");
-        } else {
-          Serial.println("API upload failed");
-        }
-      }
-      #endif
-    }
-    
-    // 디버그 출력
-    static int debugCount = 0;
-    debugCount++;
-    if (debugCount >= 5) {  // 5초마다
-      debugCount = 0;
-      Serial.printf("[%s] Temp: %.1f°C (Set:%d°C) | Time: %d/%dmin | Heater:%d Fan:%d | OH:%d\n",
-        system_running ? "RUN" : "STOP",
-        gCUR.measure_ntc_temp,
-        set_temperature,
-        (set_time_minutes - gCUR.total_remain_minute),
-        set_time_minutes,
-        gCUR.ctrl.heater,
-        gCUR.ctrl.fan,
-        digitalRead(PIN_OH)
+      bool success = uploadProcessData(
+        API_PRODUCT_ID, API_PARTNER_ID, API_MACHINE_ID,
+        API_RECORD_ID, API_DEPARTURE_YN,
+        temp, humidity, remainMin
       );
+      
+      if (success) {
+        Serial.println("API upload success");
+      } else {
+        Serial.println("API upload failed");
+      }
     }
+    #endif
   }
   
   delay(10);  // CPU 부하 감소
