@@ -11,6 +11,7 @@
 #include "updateAPI/updateAPI.h"
 
 // ========== 전역 변수 ==========
+uint64_t gChipID = 0;            // ESP32 Chip ID (MAC 기반 고유 ID)
 bool system_start_flag = false;  // 시스템 시작 플래그
 bool system_running = false;     // 운전 중 플래그
 uint16_t set_temperature = 60;   // 설정 온도 (℃)
@@ -182,6 +183,10 @@ void setup() {
   Serial.println("ESP32 Dryer Controller v1.1");
   Serial.println("===========================================");
   
+  // ESP32 Chip ID 읽기 및 전역 변수에 저장 (MAC 주소 기반 Unique ID)
+  gChipID = ESP.getEfuseMac();
+  Serial.printf("ESP32 Chip ID: %04X%08X\n", (uint16_t)(gChipID >> 32), (uint32_t)gChipID);
+  
   // 핀 초기화
   initPins();
   
@@ -204,6 +209,17 @@ void setup() {
   // OTA 설정
   if (WiFi.status() == WL_CONNECTED) {
     setupOTA();
+    
+    // 공정 시작 API 호출 (record_id 받아오기)
+    #if ENABLE_API_UPLOAD
+    delay(2000);  // WiFi 안정화 대기
+    Serial.println("[Setup] Calling processStart to get record_id...");
+    if (gUpdateAPI.processStart()) {
+      Serial.println("[Setup] processStart success! Ready to send data.");
+    } else {
+      Serial.println("[Setup] processStart failed. Will retry later.");
+    }
+    #endif
   }
   
   // 타이머/인터럽트 시작
@@ -215,50 +231,6 @@ void setup() {
                 gCUR.auto_damper ? "AUTO" : "MANUAL");
   Serial.println("===========================================\n");
 }
-
-// // ========== 버튼 처리 ==========
-// void handleButtons() {
-//   static bool lastPwrSwState = HIGH;
-//   static unsigned long lastDebounceTime = 0;
-//   const unsigned long debounceDelay = 50;
-  
-//   bool currentPwrSwState = digitalRead(PIN_PWR_SW);
-  
-//   // 디바운싱
-//   if (currentPwrSwState != lastPwrSwState) {
-//     lastDebounceTime = millis();
-//   }
-  
-//   if ((millis() - lastDebounceTime) > debounceDelay) {
-//     // 버튼이 눌렸을 때 (LOW)
-//     if (currentPwrSwState == LOW && lastPwrSwState == HIGH) {
-//       // 운전 시작/정지 토글
-//       system_running = !system_running;
-      
-//       if (system_running) {
-//         Serial.println("=== START ===");
-//         running_seconds = 0;
-//         gCUR.total_remain_minute = set_time_minutes;
-//         gCUR.ctrl.fan = 1;
-//         digitalWrite(PIN_FAN, HIGH);
-//         digitalWrite(PIN_BEEP, HIGH);
-//         delay(100);
-//         digitalWrite(PIN_BEEP, LOW);
-//       } else {
-//         Serial.println("=== STOP ===");
-//         gCUR.ctrl.heater = 0;
-//         gCUR.ctrl.fan = 0;
-//         digitalWrite(PIN_HEATER, LOW);
-//         digitalWrite(PIN_FAN, LOW);
-//         digitalWrite(PIN_BEEP, HIGH);
-//         delay(200);
-//         digitalWrite(PIN_BEEP, LOW);
-//       }
-//     }
-//   }
-  
-//   lastPwrSwState = currentPwrSwState;
-// }
 
 // ========== loop ==========
 void loop() {
@@ -287,13 +259,23 @@ void loop() {
     
     // 1분 콜백 실행
     gData.onMinuteElapsed();
+  }
+  
+  // API 업로드 (5분 주기) - processStart()로 record_id를 받아온 후 공정데이터 전송
+  #if ENABLE_API_UPLOAD
+  static unsigned long lastUploadTime = 0;
+  unsigned long currentTime = millis();
+  
+  if (currentTime - lastUploadTime >= API_UPLOAD_INTERVAL_MS) {
+    lastUploadTime = currentTime;
     
-    // API 업로드 (FreeRTOS Task에 큐잉)
     float tempC = gData.readNTCtempC();
     if (!isnan(tempC)) {
       gUpdateAPI.queueUpload((int)tempC, API_DEPARTURE_YN);
+      Serial.printf("[API] Queued upload: temp=%.1f°C\n", tempC);
     }
   }
+  #endif
   
   delay(10);  // CPU 부하 감소
 }
