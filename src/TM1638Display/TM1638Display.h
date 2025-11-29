@@ -101,17 +101,15 @@ public:
   // 키 입력 읽기 (4바이트 키 데이터 반환)
   //uint32_t getButtons();
   
-  // 전체 디스플레이 업데이트
-  void sendToDisplay();
+
   
   // 시간 표시 (분 단위)
   void displayTime(uint16_t minute);
-  
   // 온도 2개 표시 (현재온도, 설정온도)
   void displayDualTemp(uint16_t temp, uint16_t setTemp);
-
-  void  key_process(uint8_t key);
-  uint8_t getButtons(void);
+  
+  void key_process();
+   void sendToDisplay();// 전체 디스플레이 업데이트
   void beep();  // 부저 소리 (50ms)
 private:
   uint8_t _pinSTB;
@@ -139,5 +137,5 @@ private:
   void setLED();
   void displaySegments(uint8_t segment, uint16_t digit);
   void setString(uint8_t pos, const char* string, uint8_t len);
-  
+  uint8_t getButtons(void);
 };

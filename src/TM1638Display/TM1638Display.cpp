@@ -536,21 +536,21 @@ void TM1638Display::beep() {
 }
 
 //=============================================
-void  TM1638Display::key_process(uint8_t key){
+void  TM1638Display::key_process(){
   static uint8_t ex_key=0;
   static uint16_t key_press_cnt=0;
   static unsigned long last_key_time = 0;  // 키 디바운싱용
   static unsigned long last_save_time = 0; // Flash 저장용
   static bool need_save = false;
-  int lval;
-  int max_temp=1000;//MAX_TEMP;
   uint8_t beef_on=0;
   uint8_t idamper;
-  
+  uint8_t key = getButtons();
+  int lval;
+  int max_temp=1000;//MAX_TEMP;
   // 3초 경과 후 Flash 저장
   if (need_save && (millis() - last_save_time >= 3000)) {
-    extern dataClass* DataClass;
-    DataClass->saveToFlash();
+    extern dataClass gData;
+    gData.saveToFlash();
     need_save = false;
     printf("Settings saved to flash\n");
   }

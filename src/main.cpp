@@ -205,32 +205,32 @@ void handleButtons() {
 }
 
 // ========== 디스플레이 업데이트 ==========
-void updateDisplay() {
-  static uint8_t displayMode = 0;  // 0: 온도, 1: 시간
-  static int blinkCount = 0;
+// void updateDisplay() {
+//   static uint8_t displayMode = 0;  // 0: 온도, 1: 시간
+//   static int blinkCount = 0;
   
-  if (system_running) {
-    // 운전 중: 교대로 온도/시간 표시
-    blinkCount++;
-    if (blinkCount >= 3) {  // 3초마다 전환
-      blinkCount = 0;
-      displayMode = !displayMode;
-    }
+//   if (system_running) {
+//     // 운전 중: 교대로 온도/시간 표시
+//     blinkCount++;
+//     if (blinkCount >= 3) {  // 3초마다 전환
+//       blinkCount = 0;
+//       displayMode = !displayMode;
+//     }
     
-    if (displayMode == 0) {
-      // 현재 온도 표시 (예: 45.2℃)
-      int tempX10 = (int)(gCUR.measure_ntc_temp * 10.0f);
-      gDisplay.setNumber(0, tempX10, 1);  // 소수점 1자리
-      gDisplay.setDot(2, true);  // 소수점 표시
-    } else {
-      // 남은 시간 표시 (분)
-      gDisplay.setNumber(0, gCUR.total_remain_minute, 0);
-    }
-  } else {
-    // 대기 중: 설정 온도 표시
-    gDisplay.setNumber(0, set_temperature, 0);
-  }
-}
+//     if (displayMode == 0) {
+//       // 현재 온도 표시 (예: 45.2℃)
+//       int tempX10 = (int)(gCUR.measure_ntc_temp * 10.0f);
+//       gDisplay.setNumber(0, tempX10, 1);  // 소수점 1자리
+//       gDisplay.setDot(2, true);  // 소수점 표시
+//     } else {
+//       // 남은 시간 표시 (분)
+//       gDisplay.setNumber(0, gCUR.total_remain_minute, 0);
+//     }
+//   } else {
+//     // 대기 중: 설정 온도 표시
+//     gDisplay.setNumber(0, set_temperature, 0);
+//   }
+// }
 
 // ========== loop ==========
 void loop() {
@@ -238,8 +238,10 @@ void loop() {
   ArduinoOTA.handle();
   
   // 버튼 입력 처리
-  handleButtons();
-  
+ // handleButtons();
+  gDisplay.key_process();
+  gDisplay.sendToDisplay();
+
   // 1초마다 실행
   if (flag_1sec) {
     portENTER_CRITICAL(&timerMux);
@@ -304,7 +306,7 @@ void loop() {
     }
     
     // 디스플레이 업데이트
-    updateDisplay();
+    //updateDisplay();
     
     // 1분마다 처리
     static int secondCount = 0;
