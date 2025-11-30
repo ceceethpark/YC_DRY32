@@ -25,6 +25,10 @@ public:
     // NTC 온도 읽기
     float readNTCtempC();
     
+    // SHT30 온도/습도 읽기
+    float readSHT30tempC();   // 온도 (℃)
+    float readSHT30humidity(); // 습도 (%)
+    
     // Flash 저장/로드
     void saveToFlash();
     void loadFromFlash();
@@ -37,8 +41,7 @@ public:
     // API 업로드 트리거
     void triggerAPIUpload(int measureValue, const char* departureYn = "N");
     
-    // 온도 측정 및 필터링
-    void measureAndFilterTemp();
+
     
     // 히터 온도 제어
     void controlHeater();
@@ -72,6 +75,8 @@ private:
     
     // 팬 전류 감시용
     uint16_t _fan_error_count;    // 팬 에러 카운터
+    void measure_fan_current();
+    void measureAndFilterTemp(); // 온도 측정 및 필터링
 };
 
 #endif // DATACLASS_H

@@ -1,5 +1,19 @@
 #pragma once
 
+typedef union _RELAY_DATA {
+    struct {
+      uint8_t RY1:1;//compressor
+      uint8_t RY2:1;//heater
+      uint8_t RY3:1;//fan
+      uint8_t RY4:1;//damper
+      uint8_t RY5:1;//reserved
+      uint8_t RY6:1;//reserved
+      uint8_t RY7:1;//reserved
+      uint8_t RY8:1;//reserved
+    };
+    uint8_t u8;
+} RELAY_DATA;
+
 typedef struct {
 //  u8 damper_close:1;
   uint8_t fan:1;
@@ -114,15 +128,10 @@ typedef struct
   int seljung_temp;//0~255
   int control_temp;
   int ex_current_temp;
-  int pcb_tempx10;
-  
+ 
   float measure_ntc_temp;
-  float measure_sht_temp;
-  float measure_sht_humidity;
-
-  int disp_current_humidity;
-  int w_tempx10;//
-  int w_humix10;//
+  float sht30_temp;
+  float sht30_humidity; 
 
   uint16_t system_sec;
   uint16_t key_adc;
@@ -130,9 +139,11 @@ typedef struct
   uint16_t humidity_adc;
   uint16_t total_remain_minute;
   uint16_t current_minute;
+  uint16_t fan_current;
 //  uint16_t fan_pending_cnt;
 //  uint16_t finish_cnt;
-  uint16_t adc[6];
+ // uint16_t adc[6];
+  RELAY_DATA relay_state;
   LED_INFO led;
   bCTRL ctrl;
   bFLAG flg;

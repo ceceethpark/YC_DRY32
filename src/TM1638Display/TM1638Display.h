@@ -111,7 +111,7 @@ public:
   void sendToDisplay();// 전체 디스플레이 업데이트
   void beep();  // 부저 소리 (50ms)
   void processPowerButton();  // 전원 버튼 처리 (디바운싱 없음)
-  int  avr_NTC1=0;
+  float  avr_NTC1=0;
 
 private:
   uint8_t _pinSTB;

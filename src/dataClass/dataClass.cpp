@@ -111,7 +111,9 @@ void dataClass::clearFlash() {
 // 온도 측정 및 필터링
 void dataClass::measureAndFilterTemp() {
     gCUR.measure_ntc_temp = readNTCtempC();
-    // printf("Temp: raw=%.2f, filtered=%.2f\n", raw_temp, avg_temp);
+    gCUR.sht30_temp = readSHT30tempC();
+    gCUR.sht30_humidity = readSHT30humidity();
+    printf("NTC: %.1f℃ | SHT30: %.1f℃, %.1f%%\n", gCUR.measure_ntc_temp, gCUR.sht30_temp, gCUR.sht30_humidity);
 }
 
 // 히터 온도 제어 (1도 히스테리시스) + 댐퍼 자동 연동
@@ -119,10 +121,12 @@ void dataClass::controlHeater() {
     // 냉각 모드이거나 타이머가 0이면 히터 제어 안함
     if (_cooling_mode || gCUR.current_minute == 0) {
         digitalWrite(PIN_HEATER, LOW);
+        gCUR.relay_state.RY2 = 0;  // 히터 OFF
         
-        // 댐퍼 자동 모드일 때: 히터 OFF = 댐퍼 열림(0)
+        // 댓퍼 자동 모드일 때: 히터 OFF = 댓퍼 열림(0)
         if (gCUR.auto_damper) {
             digitalWrite(PIN_DAMP, LOW);
+            gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
             gCUR.led.b.damper_open = 1;
             gCUR.led.b.damper_close = 0;
         }
@@ -148,23 +152,27 @@ void dataClass::controlHeater() {
     
     // 히터 릴레이 제어 (GPIO 5)
     digitalWrite(PIN_HEATER, heater_on ? HIGH : LOW);
+    gCUR.relay_state.RY2 = heater_on ? 1 : 0;  // 히터 상태 기록
     
-    // 댐퍼 자동 모드일 때: 히터 연동 제어
+    // 댓퍼 자동 모드일 때: 히터 연동 제어
     if (gCUR.auto_damper) {
         if (heater_on) {
-            // 히터 ON = 댐퍼 닫힘(1)
+            // 히터 ON = 댓퍼 닫힘(1)
             digitalWrite(PIN_DAMP, HIGH);
+            gCUR.relay_state.RY4 = 1;  // 댓퍼 닫힘
             gCUR.led.b.damper_open = 0;
             gCUR.led.b.damper_close = 1;
         } else {
-            // 히터 OFF = 댐퍼 열림(0)
+            // 히터 OFF = 댓퍼 열림(0)
             digitalWrite(PIN_DAMP, LOW);
+            gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
             gCUR.led.b.damper_open = 1;
             gCUR.led.b.damper_close = 0;
         }
     } else {
-        // 수동 모드: 댐퍼 항상 열림(0)
+        // 수동 모드: 댓퍼 항상 열림(0)
         digitalWrite(PIN_DAMP, LOW);
+        gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
         gCUR.led.b.damper_open = 1;
         gCUR.led.b.damper_close = 0;
     }
@@ -183,10 +191,10 @@ void dataClass::onSecondElapsed() {
     gCUR.system_sec++;
     
     // 시스템 시작 중(3초)에는 제어 루프 스킵 (온도 측정과 과열 감지는 수행)
+    measureAndFilterTemp();
+    measure_fan_current();    
     if (system_start_flag) {
         printf("onSecondElapsed system_sec[%d] - System starting, skip control\n", gCUR.system_sec);
-        // 시작 중에도 온도 측정과 과열 감지는 수행 (에러 체크용)
-        measureAndFilterTemp();
         checkOverheat();
         return;
     }
@@ -200,12 +208,13 @@ void dataClass::onSecondElapsed() {
         } else {
             // 2초 경과 후 팬 켜기
             digitalWrite(PIN_FAN, HIGH);
+            gCUR.relay_state.RY3 = 1;  // 팬 ON
             _fan_started = true;
             printf("Fan started after 2 seconds\n");
         }
     }
     
-    measureAndFilterTemp();  // 온도 측정 및 필터링
+   // measureAndFilterTemp();  // 온도 측정 및 필터링
     checkOverheat();         // 과열 감지 (매초)
     controlHeater();         // 히터 제어
     
@@ -220,11 +229,11 @@ void dataClass::checkFanCurrent() {
     const int ERROR_COUNT_MAX = 3;  // 3초 연속 에러
     
     // 팬이 켜져 있는지 확인
-    bool fan_on = digitalRead(PIN_FAN);
+    bool fan_on = 1;//digitalRead(PIN_FAN);
     
     if (fan_on && _fan_started) {
         // 팬이 켜져 있을 때 전류 측정
-        int current_adc = analogRead(PIN_FAN_CURRENT);
+        int current_adc = gCUR.fan_current;
         
         if (current_adc < FAN_CURRENT_THRESHOLD) {
             // 임계값 이하면 에러 카운터 증가
@@ -260,10 +269,13 @@ void dataClass::checkOverheat() {
         
         // FAN과 HEATER 즉시 OFF
         digitalWrite(PIN_FAN, LOW);
+        gCUR.relay_state.RY3 = 0;  // 팬 OFF
         digitalWrite(PIN_HEATER, LOW);
+        gCUR.relay_state.RY2 = 0;  // 히터 OFF
         
-        // 댐퍼 열림 (안전)
+        // 댓퍼 열림 (안전)
         digitalWrite(PIN_DAMP, LOW);
+        gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
         gCUR.led.b.damper_open = 1;
         gCUR.led.b.damper_close = 0;
         
@@ -303,6 +315,7 @@ void dataClass::onMinuteElapsed() {
             if (_cooling_minutes == 0) {
                 _cooling_mode = false;
                 digitalWrite(PIN_FAN, LOW);  // 팬 끄기
+                gCUR.relay_state.RY3 = 0;  // 팬 OFF
                 printf("Cooling complete - Fan OFF\n");
             }
         }
@@ -319,6 +332,7 @@ void dataClass::onMinuteElapsed() {
         if (gCUR.current_minute == 0) {
             // 히터 끄기
             digitalWrite(PIN_HEATER, LOW);
+            gCUR.relay_state.RY2 = 0;  // 히터 OFF
             printf("Drying complete - Heater OFF\n");
             
             // 팬 5분 지연 시작
@@ -329,12 +343,17 @@ void dataClass::onMinuteElapsed() {
     }
 }
 
+ void dataClass::measure_fan_current() {
+    gCUR.fan_current = analogRead(PIN_FAN_CURRENT);
+    return;
+}
+
 // NTC 온도 변환 (Steinhart-Hart 근사)
 // 5K NTC (Beta=3970), 5K pull-up, 3.3V
 float dataClass::readNTCtempC() {
-   int raw =gDisplay.avr_NTC1;
-    // ADC 전압 계산 (ESP32 ADC는 3.3V 기준)
-    float vADC = (float)raw * 3.3f / 4095.0f;
+    // 실시간 raw 값과 필터링된 값 비교
+    //int raw_now = analogRead(PIN_NTC1);
+    float vADC = gDisplay.avr_NTC1/1000.0f;
     
     // NTC 저항 계산 (Voltage Divider: Vout = Vin * R_NTC / (R_PU + R_NTC))
     // R_NTC = R_PU * vADC / (Vin - vADC)
@@ -347,4 +366,43 @@ float dataClass::readNTCtempC() {
     float tempC = tempK - 273.15f;
     
     return tempC;
+}
+
+// SHT30 온도 센서 읽기
+// 공식: T[℃] = -66.875 + 218.75 * (VT / VDD)
+// VDD = 3.3V
+float dataClass::readSHT30tempC() {
+    const float VDD = 3300.0f;  // 3.3V = 3300mV
+    
+    // analogReadMilliVolts()는 보정된 전압(mV)을 반환
+    int milliVolts = analogReadMilliVolts(PIN_SHT30_T);
+    float vT = (float)milliVolts / 1000.0f;  // mV → V
+
+   // printf("SHT30 Temperature: %.2f V (%d mV)\n", vT, milliVolts);
+    
+    // 온도 계산
+    float tempC = -66.875f + (218.75f * (milliVolts / VDD));
+    
+    return tempC;
+}
+
+// SHT30 습도 센서 읽기
+// 공식: RH = -19.7/0.54 + (100/0.54) * (VRH / VDD)
+// 단순화: RH = -36.48 + 185.19 * (VRH / VDD)
+// VDD = 3.3V
+float dataClass::readSHT30humidity() {
+    const float VDD = 3300.0f;  // 3.3V = 3300mV
+    
+    // analogReadMilliVolts()는 보정된 전압(mV)을 반환
+    int milliVolts = analogReadMilliVolts(PIN_SHT30_H);
+    float vRH = (float)milliVolts / 1000.0f;  // mV → V
+    
+    // 습도 계산
+    float humidity = -19.7f / 0.54f + (100.0f / 0.54f) * (milliVolts / VDD);
+    
+    // 습도는 0-100% 범위로 제한
+    if (humidity < 0.0f) humidity = 0.0f;
+    if (humidity > 100.0f) humidity = 100.0f;
+    
+    return humidity;
 }

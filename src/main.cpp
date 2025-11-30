@@ -190,6 +190,11 @@ void setup() {
   // 핀 초기화
   initPins();
   
+  // ADC 설정 (11dB 감쇠로 0-3.3V 범위 사용)
+  analogSetAttenuation(ADC_11db);
+  analogReadResolution(12);  // 12비트 해상도 (0-4095)
+  Serial.println("ADC configured: 11dB attenuation, 12-bit resolution (0-3.3V)");
+  
   // TM1638 디스플레이 초기화
   gDisplay.begin();
   gDisplay.clear();
@@ -274,7 +279,7 @@ void loop() {
     float tempC = gData.readNTCtempC();
     if (!isnan(tempC)) {
       int elapsedMinutes = running_seconds / 60;
-      gMQTTClient.publishData(tempC, elapsedMinutes);
+      gMQTTClient.publishData();
     }
   }
   #endif

@@ -655,7 +655,7 @@ uint8_t TM1638Display::getButtons(void)
 {
   // 전원 버튼 처리 (디바운싱 없음)
   processPowerButton();
-  avr_NTC1 = (int)get_m0_filter(analogRead(PIN_NTC1)); 
+  avr_NTC1 = get_m0_filter(analogReadMilliVolts(PIN_NTC1)); 
   KEY_BUF key_buf;
   uint8_t key=KEY_NULL;
 ///////////////////////////////////

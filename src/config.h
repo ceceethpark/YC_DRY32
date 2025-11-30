@@ -16,8 +16,8 @@
 
 // ====== 아날로그 입력 (NTC / FAN 전류) ======
 #define PIN_NTC1        36    // 메인 온도 NTC (ADC1_CH0)
-#define PIN_NTC2        34    // 보조 NTC
-#define PIN_NTC3        35    // 댐퍼 NTC
+#define PIN_SHT30_T     32    // SHT30 온도 (ADC1_CH4)
+#define PIN_SHT30_H     35    // SHT30 습도 (ADC1_CH7)
 #define PIN_FAN_CURRENT 39    // 팬 전류 감시(옵션)
 
 // ====== TM1638 FND ======

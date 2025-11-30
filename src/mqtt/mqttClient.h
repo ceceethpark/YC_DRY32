@@ -12,9 +12,11 @@ class MQTTClient {
 public:
   void begin();
   void loop();
-    bool publishData(float temperature, int elapsedMinutes);
-    bool publishEvent(uint16_t xor_uEvent, uint16_t uEvent);
-    bool isConnected();private:
+  bool publishData();
+  bool publishEvent(uint16_t xor_uEvent, uint16_t uEvent);
+  bool isConnected();
+
+private:
   WiFiClientSecure _wifiClient;
   PubSubClient _mqttClient;
   unsigned long _lastReconnectAttempt = 0;
