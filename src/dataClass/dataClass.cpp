@@ -83,14 +83,14 @@ void dataClass::loadFromFlash() {
     
     // LED 상태 동기화 (auto_damper 값에 따라)
     if (gCUR.auto_damper) {
-        gCUR.led.b.damper_auto = 1;
+        gCUR.led.damper_auto = 1;
         // 초기 상태: 댐퍼 열림으로 설정
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
     } else {
-        gCUR.led.b.damper_auto = 0;
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_auto = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
         // 수동 모드: 댐퍼 열림
         digitalWrite(PIN_DAMP, LOW);
     }
@@ -123,12 +123,12 @@ void dataClass::controlHeater() {
         digitalWrite(PIN_HEATER, LOW);
         gCUR.relay_state.RY2 = 0;  // 히터 OFF
         
-        // 댓퍼 자동 모드일 때: 히터 OFF = 댓퍼 열림(0)
+        // 댑퍼 자동 모드일 때: 히터 OFF = 댑퍼 열림(0)
         if (gCUR.auto_damper) {
             digitalWrite(PIN_DAMP, LOW);
-            gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
-            gCUR.led.b.damper_open = 1;
-            gCUR.led.b.damper_close = 0;
+            gCUR.relay_state.RY4 = 0;  // 댑퍼 열림
+            gCUR.led.damper_open = 1;
+            gCUR.led.damper_close = 0;
         }
         return;
     }
@@ -160,21 +160,21 @@ void dataClass::controlHeater() {
             // 히터 ON = 댓퍼 닫힘(1)
             digitalWrite(PIN_DAMP, HIGH);
             gCUR.relay_state.RY4 = 1;  // 댓퍼 닫힘
-            gCUR.led.b.damper_open = 0;
-            gCUR.led.b.damper_close = 1;
+            gCUR.led.damper_open = 0;
+            gCUR.led.damper_close = 1;
         } else {
             // 히터 OFF = 댓퍼 열림(0)
             digitalWrite(PIN_DAMP, LOW);
             gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
-            gCUR.led.b.damper_open = 1;
-            gCUR.led.b.damper_close = 0;
+            gCUR.led.damper_open = 1;
+            gCUR.led.damper_close = 0;
         }
     } else {
         // 수동 모드: 댓퍼 항상 열림(0)
         digitalWrite(PIN_DAMP, LOW);
         gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
     }
     
     // 디버그 출력 (필요시 주석 해제)
@@ -276,8 +276,8 @@ void dataClass::checkOverheat() {
         // 댓퍼 열림 (안전)
         digitalWrite(PIN_DAMP, LOW);
         gCUR.relay_state.RY4 = 0;  // 댓퍼 열림
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
         
         // 1초마다 비프음 발생 (50ms ON)
         digitalWrite(PIN_BEEP, HIGH);

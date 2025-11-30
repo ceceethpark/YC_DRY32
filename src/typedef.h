@@ -33,20 +33,29 @@ typedef struct {
   uint8_t soft_off;
 }bFLAG;
 
-typedef struct {
-  uint8_t heater:1;        //C
-  uint8_t fan:1;           //B
-  uint8_t ilban:1;
-  uint8_t papper:1;
-  uint8_t goggam:1;
-  uint8_t damper_auto:1;   //E
-  uint8_t damper_open:1;   //
-  uint8_t damper_close:1;   //F
-}bLED;
+// typedef struct {
+//   uint8_t heater:1;        //C
+//   uint8_t fan:1;           //B
+//   uint8_t ilban:1;
+//   uint8_t papper:1;
+//   uint8_t goggam:1;
+//   uint8_t damper_auto:1;   //E
+//   uint8_t damper_open:1;   //
+//   uint8_t damper_close:1;   //F
+// }bLED;
 
 typedef union _LED_INFO
 {
-  bLED b;
+  struct {
+    uint8_t heater:1;        //C
+    uint8_t fan:1;           //B
+    uint8_t ilban:1;
+    uint8_t papper:1;
+    uint8_t goggam:1;
+    uint8_t damper_auto:1;   //E
+    uint8_t damper_open:1;   //
+    uint8_t damper_close:1;   //F
+  };
   uint8_t data;
 }LED_INFO;
 
@@ -85,32 +94,52 @@ typedef struct
 }MODE_TABLE;
 
 
-// 이벤트 비트 정의
-typedef struct {
-  uint8_t POWER_ON:1;
-  uint8_t HIGH_PLASMA_ALARM:1;
-  uint8_t HIGH_TEMPER_ALARM:1;
-  uint8_t LOW_TEMPER_ALARM:1;
+// // 이벤트 비트 정의
+// typedef struct {
+//   uint8_t POWER_ON:1;
+//   uint8_t HIGH_PLASMA_ALARM:1;
+//   uint8_t HIGH_TEMPER_ALARM:1;
+//   uint8_t LOW_TEMPER_ALARM:1;
 
-  uint8_t LOW_HUMIDITY_ALARM:1;
-  uint8_t TEMPERATURE_SENSOR_ALARM:1;
-  uint8_t COMP_CURRENT_ALARM:1;
-  uint8_t EVAFAN_CURRENT_ALARM:1;
+//   uint8_t LOW_HUMIDITY_ALARM:1;
+//   uint8_t TEMPERATURE_SENSOR_ALARM:1;
+//   uint8_t COMP_CURRENT_ALARM:1;
+//   uint8_t EVAFAN_CURRENT_ALARM:1;
 
-  uint8_t EVAHEATER_CURRENT_ALARM:1;
-  uint8_t ICE_ALARM:1;
-  uint8_t OCR_ALARM:1;
-  uint8_t EVAHEATER_HTC_ALARM:1;
+//   uint8_t EVAHEATER_CURRENT_ALARM:1;
+//   uint8_t ICE_ALARM:1;
+//   uint8_t OCR_ALARM:1;
+//   uint8_t EVAHEATER_HTC_ALARM:1;
 
-  uint8_t SUPER_COOL_ALARM:1;
-  uint8_t CHANGGO_OPEN_DOOR:1;
-  uint8_t JAESANG_ON:1;
-  uint8_t NO_SENSOR_EVENT:1;
-}EVENT_BIT;
+//   uint8_t SUPER_COOL_ALARM:1;
+//   uint8_t CHANGGO_OPEN_DOOR:1;
+//   uint8_t JAESANG_ON:1;
+//   uint8_t NO_SENSOR_EVENT:1;
+// }EVENT_BIT;
 
 typedef union _UNION_EVENT
 {
-  EVENT_BIT bEvent;
+  struct {
+    uint8_t POWER_ON:1;
+    uint8_t HIGH_PLASMA_ALARM:1;
+    uint8_t HIGH_TEMPER_ALARM:1;
+    uint8_t LOW_TEMPER_ALARM:1;
+
+    uint8_t LOW_HUMIDITY_ALARM:1;
+    uint8_t TEMPERATURE_SENSOR_ALARM:1;
+    uint8_t COMP_CURRENT_ALARM:1;
+    uint8_t EVAFAN_CURRENT_ALARM:1;
+
+    uint8_t EVAHEATER_CURRENT_ALARM:1;
+    uint8_t ICE_ALARM:1;
+    uint8_t OCR_ALARM:1;
+    uint8_t EVAHEATER_HTC_ALARM:1;
+
+    uint8_t SUPER_COOL_ALARM:1;
+    uint8_t CHANGGO_OPEN_DOOR:1;
+    uint8_t JAESANG_ON:1;
+    uint8_t NO_SENSOR_EVENT:1;
+  };
   uint16_t u16;
 }UNION_EVENT;
 
@@ -125,28 +154,20 @@ typedef struct _PUBLISH_EVENT
 typedef struct
 {
   uint8_t auto_damper;
-  int seljung_temp;//0~255
-  int control_temp;
-  int ex_current_temp;
- 
-  float measure_ntc_temp;
-  float sht30_temp;
-  float sht30_humidity; 
+  int seljung_temp;           // 설정 온도 (0~255)
+  
+  float measure_ntc_temp;     // NTC 센서로 측정한 온도
+  float sht30_temp;           // SHT30 온도 센서 값
+  float sht30_humidity;       // SHT30 습도 센서 값
 
-  uint16_t system_sec;
-  uint16_t key_adc;
-  uint16_t ntc_adc;
-  uint16_t humidity_adc;
-  uint16_t total_remain_minute;
-  uint16_t current_minute;
-  uint16_t fan_current;
-//  uint16_t fan_pending_cnt;
-//  uint16_t finish_cnt;
- // uint16_t adc[6];
-  RELAY_DATA relay_state;
-  LED_INFO led;
-  bCTRL ctrl;
-  bFLAG flg;
-  ERROR_INFO error_info;
-  PUBLISH_EVENT pubEvent;  // 이벤트 상태
+  uint16_t system_sec;        // 시스템 초 카운터
+  uint16_t current_minute;    // 현재 경과 시간(분)
+  uint16_t fan_current;       // 팬 전류 값
+  
+  RELAY_DATA relay_state;     // 릴레이 상태 (RY1~RY8)
+  LED_INFO led;               // LED 상태
+  bCTRL ctrl;                 // 제어 상태
+  bFLAG flg;                  // 플래그
+  ERROR_INFO error_info;      // 에러 정보
+  PUBLISH_EVENT pubEvent;     // 이벤트 상태
 }CURRENT_DATA;

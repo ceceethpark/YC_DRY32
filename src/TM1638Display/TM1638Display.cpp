@@ -614,15 +614,15 @@ void  TM1638Display::key_process(){
       // LED 업데이트
       if(gCUR.auto_damper) {
         // 자동 모드: AUTO LED 켜짐, OPEN/CLOSE는 히터 상태에 따라 결정됨
-        gCUR.led.b.damper_auto = 1;
+        gCUR.led.damper_auto = 1;
         // 초기값으로 OPEN 설정 (실제 상태는 controlHeater()에서 업데이트)
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
       } else {
         // 수동 모드: 댐퍼 열림 표시
-        gCUR.led.b.damper_auto = 0;
-        gCUR.led.b.damper_open = 1;
-        gCUR.led.b.damper_close = 0;
+        gCUR.led.damper_auto = 0;
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
         digitalWrite(PIN_DAMP, LOW);  // 댐퍼 열림(0)
       }
       
