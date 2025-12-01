@@ -46,3 +46,10 @@ logs/
 
 # Serial output (선택사항)
 serial_output.txt
+
+# Upload batch files
+1.bat
+2.bat
+switch_usb.py
+switch_ota.py
+platformio.ini.bak

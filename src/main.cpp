@@ -17,11 +17,22 @@ bool system_running = false;     // 운전 중 플래그
 uint16_t set_temperature = 60;   // 설정 온도 (℃)
 uint16_t set_time_minutes = 30;  // 설정 시간 (분)
 uint16_t running_seconds = 0;    // 운전 경과 시간 (초)
+bool smartconfig_request = false;  // SmartConfig 요청 플래그
+bool smartconfig_running = false;  // SmartConfig 실행 중
+unsigned long smartconfig_start_time = 0;  // SmartConfig 시작 시간
 
 // ========== 전역 객체 ==========
 dataClass gData;
 TM1638Display gDisplay(PIN_FND_STB, PIN_FND_CLK, PIN_FND_DIO, FND_BRIGHTNESS);
 // MQTT 클라이언트는 mqttClient.cpp에서 정의됨
+Preferences preferences;
+
+// ========== FreeRTOS Task 핸들 ==========
+TaskHandle_t uiTaskHandle = NULL;
+
+// ========== FreeRTOS Task 핸들 ==========
+TaskHandle_t displayTaskHandle = NULL;
+TaskHandle_t keyboardTaskHandle = NULL;
 
 // ========== 타이머 인터럽트 변수 ==========
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
@@ -74,12 +85,51 @@ void IRAM_ATTR onZeroCross() {
 }
 #endif
 
-// ========== WiFi 연결 ==========
-void connectWiFi() {
-  Serial.print("Connecting to WiFi");
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+// ========== UI Task (Keyboard + Display) ==========
+void uiTask(void *parameter) {
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xFrequency = pdMS_TO_TICKS(50);  // 50ms 주기
   
+  uint8_t displayCounter = 0;  // Display 업데이트 카운터
+  
+  for (;;) {
+    // Keyboard 처리 (매 50ms)
+    gDisplay.key_process();
+    
+    // Display 처리 (매 100ms = 50ms x 2)
+    displayCounter++;
+    if (displayCounter >= 2) {
+      gDisplay.sendToDisplay();
+      displayCounter = 0;
+    }
+    
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+  }
+}
+
+// ========== WiFi 연결 (ESPTouch SmartConfig 지원) ==========
+void connectWiFi() {
+  // Flash에서 저장된 WiFi 정보 읽기
+  preferences.begin("wifi", true);
+  String saved_ssid = preferences.getString("ssid", "");
+  String saved_pass = preferences.getString("password", "");
+  preferences.end();
+  
+  WiFi.mode(WIFI_STA);
+  
+  // 저장된 WiFi 정보가 있으면 사용
+  if (saved_ssid.length() > 0) {
+    Serial.println("Using saved WiFi credentials");
+    Serial.print("SSID: ");
+    Serial.println(saved_ssid);
+    WiFi.begin(saved_ssid.c_str(), saved_pass.c_str());
+  } else {
+    // 없으면 config.h의 기본값 사용
+    Serial.println("Using default WiFi credentials");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  }
+  
+  Serial.print("Connecting to WiFi");
   int cnt = 0;
   while (WiFi.status() != WL_CONNECTED && cnt < 20) {
     delay(500);
@@ -91,8 +141,77 @@ void connectWiFi() {
     Serial.println("\nWiFi connected!");
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
+    gCUR.led.network = 1;  // 네트워크 활성화 LED ON
   } else {
     Serial.println("\nWiFi connection failed. Continuing without WiFi.");
+    gCUR.led.network = 0;  // 네트워크 비활성화 LED OFF
+  }
+}
+
+// ========== ESPTouch SmartConfig 시작 ==========
+void startSmartConfig() {
+  Serial.println("Starting SmartConfig...");
+  
+  // FND 상태 변경: SmartConfig 시작
+  gCUR.fnd_state = FND_SMARTCONFIG_START;
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.beginSmartConfig();
+  
+  // FND 상태: SmartConfig 대기
+  gCUR.fnd_state = FND_SMARTCONFIG_WAIT;
+  
+  smartconfig_running = true;
+  smartconfig_start_time = millis();
+  
+  Serial.println("Waiting for SmartConfig (60 sec timeout)...");
+}
+
+// ========== SmartConfig 처리 (loop에서 호출) ==========
+void processSmartConfig() {
+  if (!smartconfig_running) return;
+  
+  // 타임아웃 체크 (60초)
+  if (millis() - smartconfig_start_time > 60000) {
+    Serial.println("\nSmartConfig Timeout");
+    WiFi.stopSmartConfig();
+    smartconfig_running = false;
+    gCUR.led.network = 0;
+    gCUR.fnd_state = FND_DRY_STATE;
+    return;
+  }
+  
+  // 성공 체크
+  if (WiFi.smartConfigDone()) {
+    smartconfig_running = false;
+    
+    Serial.println("\nSmartConfig Success!");
+    Serial.print("SSID: ");
+    Serial.println(WiFi.SSID());
+    
+    // FND 상태: SmartConfig 완료
+    gCUR.fnd_state = FND_SMARTCONFIG_DONE;
+    
+    // WiFi 정보를 Flash에 저장
+    preferences.begin("wifi", false);
+    preferences.putString("ssid", WiFi.SSID());
+    preferences.putString("password", WiFi.psk());
+    preferences.end();
+    
+    Serial.println("WiFi credentials saved to Flash");
+    gCUR.led.network = 1;
+    
+    // 2초 후 정상 모드로 복귀 (타이머로 처리)
+    smartconfig_start_time = millis();  // 2초 대기용 재사용
+  }
+}
+
+// ========== SmartConfig DONE 후 대기 ==========
+void checkSmartConfigDone() {
+  if (gCUR.fnd_state == FND_SMARTCONFIG_DONE) {
+    if (millis() - smartconfig_start_time > 2000) {
+      gCUR.fnd_state = FND_DRY_STATE;
+    }
   }
 }
 
@@ -199,11 +318,31 @@ void setup() {
   gDisplay.begin();
   gDisplay.clear();
   
+  // FND 부팅 화면 표시 (REVISION) - 즉시 시작
+  gCUR.fnd_state = FND_BOOT;
+  
+  // FreeRTOS UI Task 생성 (Keyboard + Display 통합) - 최우선 실행
+  xTaskCreatePinnedToCore(
+    uiTask,             // Task 함수
+    "UITask",           // Task 이름
+    4096,               // Stack 크기
+    NULL,               // Task 파라미터
+    2,                  // 우선순위 (2 = 높음)
+    &uiTaskHandle,      // Task 핸들
+    1                   // Core 1에서 실행
+  );
+  
+  // UI Task 시작 대기 (디스플레이가 업데이트되도록)
+  delay(100);
+  
   // dataClass 초기화
   gData.begin();
   
   // Flash에서 설정값 로드 (온도, 시간, 댐퍼 모드)
   gData.loadFromFlash();
+  
+  // 타이머/인터럽트 시작
+  initTimerInterrupt();
   
   // WiFi 연결
   connectWiFi();
@@ -226,24 +365,59 @@ void setup() {
     setupOTA();
   }
   
-  // 타이머/인터럽트 시작
-  initTimerInterrupt();
-  
   Serial.println("Setup complete!");
   Serial.printf("Loaded: Temp=%d°C, Time=%dmin, Damper=%s\n", 
                 gCUR.seljung_temp, gCUR.current_minute, 
                 gCUR.auto_damper ? "AUTO" : "MANUAL");
+  Serial.println("FreeRTOS UITask created: Keyboard(50ms) + Display(100ms)");
+  Serial.println("Showing REVISION for 3 seconds...");
   Serial.println("===========================================\n");
 }
 
 // ========== loop ==========
 void loop() {
+  static unsigned long boot_display_start = millis();
+  static bool boot_display_done = false;
+  
+  // 파워 ON 시 REVISION 3초 표시 후 FND_DRY_STATE로 전환
+  if (!boot_display_done && gCUR.fnd_state == FND_BOOT) {
+    if (millis() - boot_display_start >= 3000) {
+      gCUR.fnd_state = FND_DRY_STATE;
+      boot_display_done = true;
+      Serial.println("Boot display done - Switching to FND_DRY_STATE");
+    }
+  }
+  
   // OTA 핸들링
   ArduinoOTA.handle();
   
-  // 키 입력 및 디스플레이 처리
-  gDisplay.key_process();
-  gDisplay.sendToDisplay();
+  // 네트워크 상태 LED 업데이트
+  if (WiFi.status() == WL_CONNECTED) {
+    gCUR.led.network = 1;  // 네트워크 활성화
+  } else {
+    gCUR.led.network = 0;  // 네트워크 비활성화
+  }
+  
+  // 디스플레이와 키보드는 별도 Task에서 처리
+  
+  // SmartConfig 요청 체크 (TM1638Display::key_process()에서 설정)
+  if (smartconfig_request) {
+    smartconfig_request = false;
+    Serial.println("KEY_MODE Long Press - Starting SmartConfig");
+    startSmartConfig();
+  }
+  
+  // SmartConfig 처리 (비블로킹)
+  processSmartConfig();
+  checkSmartConfigDone();
+  
+  // MQTT ID 수신 시 3초 후 FND_DRY_STATE로 복귀
+  if (gCUR.fnd_state == FND_MQTT_RECV_ID) {
+    if (millis() - gCUR.mqtt_recv_time >= 3000) {
+      gCUR.fnd_state = FND_DRY_STATE;
+      Serial.println("MQTT ID display timeout - Switching to FND_DRY_STATE");
+    }
+  }
   
   // 1초마다 실행
   if (flag_1sec) {
@@ -263,6 +437,13 @@ void loop() {
     
     // 1분 콜백 실행
     gData.onMinuteElapsed();
+  }
+  
+  // 네트워크 상태 LED 업데이트
+  if (WiFi.status() == WL_CONNECTED) {
+    gCUR.led.network = 1;  // 네트워크 활성화
+  } else {
+    gCUR.led.network = 0;  // 네트워크 비활성화
   }
   
   // MQTT loop (재연결 처리 및 메시지 처리)

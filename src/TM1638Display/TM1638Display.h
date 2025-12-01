@@ -112,6 +112,9 @@ public:
   void beep();  // 부저 소리 (50ms)
   void processPowerButton();  // 전원 버튼 처리 (디바운싱 없음)
   float  avr_NTC1=0;
+  
+  // 7세그먼트 테이블 (public으로 노출)
+  static const uint8_t DIGITS_TABLE[];
 
 private:
   uint8_t _pinSTB;
@@ -121,9 +124,6 @@ private:
   
   // 디스플레이 세그먼트 버퍼 (8자리 + LED)
   uint8_t _displaySegment[16];
-  
-  // 7세그먼트 테이블 (0-9, A-Z, a-z)
-  static const uint8_t DIGITS_TABLE[];
   
   // Low-level 함수
   void writeBit(bool bitVal);

@@ -1,4 +1,12 @@
 #pragma once
+typedef enum _FND_STATE{
+  FND_BOOT=0,
+  FND_DRY_STATE,
+  FND_SMARTCONFIG_START,
+  FND_SMARTCONFIG_WAIT,
+  FND_SMARTCONFIG_DONE,
+  FND_MQTT_RECV_ID,
+}FND_STATE;
 
 typedef union _RELAY_DATA {
     struct {
@@ -33,17 +41,6 @@ typedef struct {
   uint8_t soft_off;
 }bFLAG;
 
-// typedef struct {
-//   uint8_t heater:1;        //C
-//   uint8_t fan:1;           //B
-//   uint8_t ilban:1;
-//   uint8_t papper:1;
-//   uint8_t goggam:1;
-//   uint8_t damper_auto:1;   //E
-//   uint8_t damper_open:1;   //
-//   uint8_t damper_close:1;   //F
-// }bLED;
-
 typedef union _LED_INFO
 {
   struct {
@@ -51,7 +48,7 @@ typedef union _LED_INFO
     uint8_t fan:1;           //B
     uint8_t ilban:1;
     uint8_t papper:1;
-    uint8_t goggam:1;
+    uint8_t network:1;
     uint8_t damper_auto:1;   //E
     uint8_t damper_open:1;   //
     uint8_t damper_close:1;   //F
@@ -92,30 +89,6 @@ typedef struct
   uint8_t step;
   CTRL_OBJECT node[16];
 }MODE_TABLE;
-
-
-// // 이벤트 비트 정의
-// typedef struct {
-//   uint8_t POWER_ON:1;
-//   uint8_t HIGH_PLASMA_ALARM:1;
-//   uint8_t HIGH_TEMPER_ALARM:1;
-//   uint8_t LOW_TEMPER_ALARM:1;
-
-//   uint8_t LOW_HUMIDITY_ALARM:1;
-//   uint8_t TEMPERATURE_SENSOR_ALARM:1;
-//   uint8_t COMP_CURRENT_ALARM:1;
-//   uint8_t EVAFAN_CURRENT_ALARM:1;
-
-//   uint8_t EVAHEATER_CURRENT_ALARM:1;
-//   uint8_t ICE_ALARM:1;
-//   uint8_t OCR_ALARM:1;
-//   uint8_t EVAHEATER_HTC_ALARM:1;
-
-//   uint8_t SUPER_COOL_ALARM:1;
-//   uint8_t CHANGGO_OPEN_DOOR:1;
-//   uint8_t JAESANG_ON:1;
-//   uint8_t NO_SENSOR_EVENT:1;
-// }EVENT_BIT;
 
 typedef union _UNION_EVENT
 {
@@ -170,4 +143,7 @@ typedef struct
   bFLAG flg;                  // 플래그
   ERROR_INFO error_info;      // 에러 정보
   PUBLISH_EVENT pubEvent;     // 이벤트 상태
+  FND_STATE fnd_state;        // FND 디스플레이 상태
+  char mqtt_recv_id[16];      // MQTT로 받은 ID 문자열
+  unsigned long mqtt_recv_time; // MQTT ID 수신 시간
 }CURRENT_DATA;

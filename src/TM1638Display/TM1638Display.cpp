@@ -6,7 +6,8 @@
 
 //#define LSBFIRST 1
 #define REVISION "H2TT0002"  // 버전 정보
-
+#define SMARTCONFIG_WAIT "SC--0000"   // SmartConfig 대기 표시
+#define SMARTCONFIG_DONE "SC--DonE"  // SmartConfig 완료 표시
 #define TM_ACTIVATE  0x8F // Start up
 #define TM_WRITE_LOC 0x44 // Write to a location
 #define TM_WRITE_INC 0x40 // Incremental write
@@ -352,64 +353,70 @@ void TM1638Display::sendToDisplay() {
   memset(_displaySegment,0,sizeof(_displaySegment));
   setLED();
   
-  // 10번마다 디버그 출력
-  // if (++debug_cnt >= 100) {
-  //   debug_cnt = 0;
-  //   Serial.printf("Display: start=%d soft_off=%d error=0x%02X\n", 
-  //                 system_start_flag, gCUR.flg.soft_off, gCUR.error_info.data);
+  // FND_STATE 확인: SmartConfig 중이면 sendToDisplay 스킵 (직접 제어)
+  // if (gCUR.fnd_state != FND_DRY_STATE) {
+  //   return;  // SmartConfig 중에는 main.cpp에서 직접 디스플레이 제어
   // }
-  
-  // 에러가 있으면 항상 에러 표시 우선 (시작 중에도)
-  if(gCUR.error_info.data){
-      //memset(displaySegment,0,sizeof(displaySegment));
-      if(gCUR.error_info.fan_error)           sprintf(string, "E1");
-      else if(gCUR.error_info.heater1_error||gCUR.error_info.heater2_error)   sprintf(string,"E2");
-      else if(gCUR.error_info.thermist_open)  sprintf(string, "E3");
-      else if(gCUR.error_info.thermist_short) sprintf(string, "E4");
-      else if(gCUR.error_info.thermo_state)    sprintf(string, "E5");
-      else if(gCUR.error_info.HiT_error)    sprintf(string, "HI");
-      else if(gCUR.error_info.mem_error)    sprintf(string, "E7");
-      setString(0,string, 2);
-      //printf("\r\n\r\n@@@@something Err!![%x]\r\n",gCUR.error_info.data);
-  }
-  else if(system_start_flag && !gCUR.flg.soft_off){
-    // 에러 없고 시작 중일 때만 REVISION 표시
-    setString(0, REVISION + 0, 2); // "H2"
-    setString(2, REVISION + 2, 2); // "TT"
-    setString(4, REVISION + 4, 2); // "00"
-    setString(6, REVISION + 6, 2); // "02"
-  }
-  else{
+  switch(gCUR.fnd_state){
+    case FND_BOOT:
+        setString(0, REVISION + 0, 2); // "H2"
+        setString(2, REVISION + 2, 2); // "TT"
+        setString(4, REVISION + 4, 2); // "00"
+        setString(6, REVISION + 6, 2); // "02"
+    break;
+    case FND_DRY_STATE:
     if(gCUR.error_info.data){
       //memset(displaySegment,0,sizeof(displaySegment));
-      if(gCUR.error_info.fan_error)           sprintf(string, "E1");
-      else if(gCUR.error_info.heater1_error||gCUR.error_info.heater2_error)   sprintf(string,"E2");
-      else if(gCUR.error_info.thermist_open)  sprintf(string, "E3");
-      else if(gCUR.error_info.thermist_short) sprintf(string, "E4");
-      else if(gCUR.error_info.thermo_state)    sprintf(string, "E5");
-      else if(gCUR.error_info.HiT_error)    sprintf(string, "HI");
-      else if(gCUR.error_info.mem_error)    sprintf(string, "E7");
-      setString(0,string, 2);
-      //printf("\r\n\r\n@@@@something Err!![%x]\r\n",gCUR.error_info.data);
-    }
-    else {
-      //if(seljung_time_out>0)displayDualTemp(gCUR.disp_current_temp/10, gCUR.seljung_temp);
-      //else displayDualTemp(gCUR.disp_current_temp/10, gCUR.disp_current_humidity/10);
-      
-      // 디버그: 표시할 값 출력
-      // if (debug_cnt == 0) {
-      //   Serial.printf("Temp=%d SetTemp=%d Time=%d min\n", 
-      //                 gCUR.control_temp/10, gCUR.seljung_temp, gCUR.current_minute);
-      // }
-      
+        if(gCUR.error_info.fan_error)           sprintf(string, "E1");
+        else if(gCUR.error_info.heater1_error||gCUR.error_info.heater2_error)   sprintf(string,"E2");
+        else if(gCUR.error_info.thermist_open)  sprintf(string, "E3");
+        else if(gCUR.error_info.thermist_short) sprintf(string, "E4");
+        else if(gCUR.error_info.thermo_state)    sprintf(string, "E5");
+        else if(gCUR.error_info.HiT_error)    sprintf(string, "HI");
+        else if(gCUR.error_info.mem_error)    sprintf(string, "E7");
+        setString(0,string, 2);
+        //printf("\r\n\r\n@@@@something Err!![%x]\r\n",gCUR.error_info.data);
+      }
+    else 
+    {
       displayDualTemp((uint16_t)gCUR.measure_ntc_temp, gCUR.seljung_temp);
       displayTime(gCUR.current_minute);
       if(sec_bling_flag)setDot(7,true);
       else setDot(7,false);
     }
+    break;
+    case FND_SMARTCONFIG_START:
+    case FND_SMARTCONFIG_WAIT:
+      // "50" 표시 (SmartConfig 진행 중)
+        setString(0, SMARTCONFIG_WAIT + 0, 2); // "H2"
+        setString(2, SMARTCONFIG_WAIT + 2, 2); // "TT"
+        setString(4, SMARTCONFIG_WAIT + 4, 4); // "00"
+      // 깜빡임 효과
+      if (!sec_bling_flag) {
+        // 꺼짐 상태
+        _displaySegment[0] = 0x00;
+        _displaySegment[1] = 0x00;
+      }
+      break;
+    case FND_SMARTCONFIG_DONE:
+        setString(0, SMARTCONFIG_DONE + 0, 8); // "SC--DonE"
+      break;
+    case FND_MQTT_RECV_ID:
+      // MQTT로 받은 ID 표시 (최대 8자리)
+      {
+       setString(2, gCUR.mqtt_recv_id + 0, 6);
+        // int len = strlen(gCUR.mqtt_recv_id);
+        // if (len > 8) len = 8;
+        // setString(0, gCUR.mqtt_recv_id, len);
+        // // 빈 자리는 0으로 채움
+        // for (int i = len; i < 8; i++) {
+        //   _displaySegment[i] = 0x00;
+        // }
+      }
+      break;
   }
-
-  if(gCUR.flg.soft_off){
+  // 에러가 있으면 항상 에러 표시 우선 (시작 중에도)
+   if(gCUR.flg.soft_off){
     memset(_displaySegment,0,sizeof(_displaySegment));
     _displaySegment[8]=gCUR.led.data&0x02;
   }
@@ -488,6 +495,8 @@ void  TM1638Display::key_process(){
   static unsigned long last_key_time = 0;  // 키 디바운싱용
   static unsigned long last_save_time = 0; // Flash 저장용
   static bool need_save = false;
+  static unsigned long mode_press_start = 0;  // KEY_MODE long-press 타이머
+  static bool mode_long_handled = false;      // long-press 처리 완료 플래그
   uint8_t beef_on=0;
   uint8_t idamper;
   uint8_t key = getButtons();
@@ -505,7 +514,8 @@ void  TM1638Display::key_process(){
   }
   if(key ==KEY_NULL) {
     ex_key=0; key_press_cnt=0;
-    //mode_key_cnt=0;
+    mode_press_start = 0;  // KEY_MODE 타이머 리셋
+    mode_long_handled = false;
     return;
   }
   
@@ -554,6 +564,9 @@ void  TM1638Display::key_process(){
       break;
     case KEY_TEMP_UP:
     case KEY_TEMP_DN:
+      mode_press_start = 0;  // KEY_MODE 타이머 리셋
+      mode_long_handled = false;
+      
       // 온도 설정 변경
       lval = gCUR.seljung_temp;
       lval = (key == KEY_TEMP_UP) ? lval + 1 : lval - 1;
@@ -574,6 +587,9 @@ void  TM1638Display::key_process(){
 
     case KEY_TIME_UP:
     case KEY_TIME_DN:
+      mode_press_start = 0;  // KEY_MODE 타이머 리셋
+      mode_long_handled = false;
+      
       {
         // 시간 설정 변경 (30분 단위, 00분 또는 30분으로 정렬)
         lval = gCUR.current_minute;
@@ -602,9 +618,23 @@ void  TM1638Display::key_process(){
       }
       break;
     case KEY_MODE:
-       //  gCUR.flg.soft_off=(gCUR.flg.soft_off)? 0:1;
+      // 3초 이상 long-press 시 SmartConfig 요청
+      if (mode_press_start == 0) {
+        mode_press_start = millis();
+        mode_long_handled = false;
+      } else if (!mode_long_handled && (millis() - mode_press_start >= 3000)) {
+        // 3초 long-press 감지
+        extern bool smartconfig_request;
+        smartconfig_request = true;
+        mode_long_handled = true;
+        beep();  // 소리로 알림
+        printf("KEY_MODE Long Press - SmartConfig Request\n");
+      }
       break;
     case KEY_DAMPER:
+      mode_press_start = 0;  // KEY_MODE 타이머 리셋
+      mode_long_handled = false;
+      
       // 댐퍼 자동 모드 토글 (0: 수동, 1: 자동)
       idamper = gCUR.auto_damper;
       idamper++;
@@ -711,10 +741,9 @@ uint8_t TM1638Display::getButtons(void)
   if(key_buf.b.b9){  // DAMPER 키 (b0은 노이즈)
      key=KEY_DAMPER;
   }
-//  if(key_buf.b.b10){
-//    key=KEY_MODE;
-//    //printf("#6\r\n");
-//  }
+  if(key_buf.b.b10){
+    key=KEY_MODE;
+  }
 #if 1
 
   //tempup/tempdn/timedn

@@ -28,10 +28,10 @@ void parseCommand(const char* cmd, const char* data) {
   else if (strcmp(cmd, "TMP") == 0) {
     // 설정 온도 //서버에서 보내는값 x10이 되어 건조기에서는  온도값으로 사용 (예 6.5도 -> 65)
     Serial.printf("[MQTT] Temperature set: %d\n", iData);
-    if (iData >= 0 && iData <= 255) {
+    if (iData >= 0 && iData <= 999) {
       //Serial.printf("[MQTT] Before: gCUR.seljung_temp = %d\n", gCUR.seljung_temp);
       gDisplay.beep();  
-      gCUR.seljung_temp = iData;
+      gCUR.seljung_temp = iData/10.0f;
       //Serial.printf("[MQTT] After: gCUR.seljung_temp = %d\n", gCUR.seljung_temp);
       gData.saveToFlash();  // Flash에 저장
       Serial.println("[MQTT] Settings saved to flash");
@@ -65,6 +65,27 @@ void parseCommand(const char* cmd, const char* data) {
       Serial.println("[MQTT] System reset requested");
       delay(100);
       ESP.restart();
+    }
+  }
+  else if (strcmp(cmd, "CGI") == 0) {
+    // CGI@ 명령: "110124|espDRY" 형식에서 ID 추출하여 FND 표시
+    // data는 문자열 전체 ("110124|espDRY")
+    char id[16];
+    int i = 0;
+    // | 앞부분의 문자만 추출
+    while (data[i] && data[i] != '|' && i < 15) {
+      id[i] = data[i];
+      i++;
+    }
+    id[i] = '\0';
+    
+    if (i > 0) {
+      // gCUR에 ID 저장 및 FND 상태 변경
+      strncpy(gCUR.mqtt_recv_id, id, sizeof(gCUR.mqtt_recv_id) - 1);
+      gCUR.mqtt_recv_id[sizeof(gCUR.mqtt_recv_id) - 1] = '\0';
+      gCUR.mqtt_recv_time = millis();
+      gCUR.fnd_state = FND_MQTT_RECV_ID;
+      Serial.printf("[MQTT] CGI@ received: %s\n", id);
     }
   }
   else {
@@ -108,13 +129,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
           char* valueStart = strchr(cmdEnd, ':');
           if (valueStart != NULL) {
             valueStart++;
-            // 공백 제거
-            while (*valueStart == ' ') valueStart++;
+            // 공백과 따옴표 제거
+            while (*valueStart == ' ' || *valueStart == '"') valueStart++;
             
-            // 숫자 부분만 추출
-            char value[16];
+            // 값 추출 (문자열 - 따옴표, }, 쉼표 전까지)
+            char value[32];
             int i = 0;
-            while (valueStart[i] && (isdigit(valueStart[i]) || valueStart[i] == '-') && i < 15) {
+            while (valueStart[i] && valueStart[i] != '"' && valueStart[i] != '}' && valueStart[i] != ',' && i < 31) {
               value[i] = valueStart[i];
               i++;
             }
