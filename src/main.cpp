@@ -14,8 +14,6 @@
 uint64_t gChipID = 0;            // ESP32 Chip ID (MAC 기반 고유 ID)
 bool system_start_flag = false;  // 시스템 시작 플래그
 bool system_running = false;     // 운전 중 플래그
-uint16_t set_temperature = 60;   // 설정 온도 (℃)
-uint16_t set_time_minutes = 30;  // 설정 시간 (분)
 uint16_t running_seconds = 0;    // 운전 경과 시간 (초)
 bool smartconfig_request = false;  // SmartConfig 요청 플래그
 bool smartconfig_running = false;  // SmartConfig 실행 중
@@ -260,7 +258,6 @@ void initPins() {
   
   // 입력 핀 설정
   pinMode(PIN_OH, INPUT);
-  pinMode(PIN_PWR_SW, INPUT);
   pinMode(PIN_ZCIRQ, INPUT);
   
   // 아날로그 핀은 자동 설정
@@ -367,7 +364,7 @@ void setup() {
   
   Serial.println("Setup complete!");
   Serial.printf("Loaded: Temp=%d°C, Time=%dmin, Damper=%s\n", 
-                gCUR.seljung_temp, gCUR.current_minute, 
+                gCUR.seljung_temp, gCUR.remaining_minute, 
                 gCUR.auto_damper ? "AUTO" : "MANUAL");
   Serial.println("FreeRTOS UITask created: Keyboard(50ms) + Display(100ms)");
   Serial.println("Showing REVISION for 3 seconds...");
@@ -403,7 +400,7 @@ void loop() {
   // SmartConfig 요청 체크 (TM1638Display::key_process()에서 설정)
   if (smartconfig_request) {
     smartconfig_request = false;
-    Serial.println("KEY_MODE Long Press - Starting SmartConfig");
+    Serial.println("KEY_PWR Long Press - Starting SmartConfig");
     startSmartConfig();
   }
   
@@ -439,7 +436,10 @@ void loop() {
     gData.onMinuteElapsed();
   }
   
-  // 네트워크 상태 LED 업데이트
+  // NTC1 ADC 필터링 (빠른 응답을 위해 main loop에서 처리)
+  gCUR.avr_NTC1 = gData.get_m0_filter(analogReadMilliVolts(PIN_NTC1));
+  
+  // 네트워크 상타 LED 업데이트
   if (WiFi.status() == WL_CONNECTED) {
     gCUR.led.network = 1;  // 네트워크 활성화
   } else {

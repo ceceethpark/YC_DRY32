@@ -42,7 +42,7 @@ void parseCommand(const char* cmd, const char* data) {
     Serial.printf("[MQTT] Timer set: %d min\n", iData);
     if (iData >= 0 && iData <= 1440) {  // 0~24시간
       gDisplay.beep();  
-      gCUR.current_minute = iData;
+      gCUR.remaining_minute = iData;
       gData.saveToFlash();  // Flash에 저장
       Serial.println("[MQTT] Settings saved to flash");
     }
@@ -293,7 +293,7 @@ bool MQTTClient::publishData() {
     2511,                               // 펌웨어 버전
                                         // 재상 모드 00
                                         // O3 모드 00
-    gCUR.current_minute,                // 재상 주기
+    gCUR.remaining_minute,              // 남은 시간
                                         // 재상 시간 0000
                                         // 오존 주기 001E (30)
                                         // 오존 발생시간 0032 (50)

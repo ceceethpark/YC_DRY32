@@ -5,9 +5,8 @@
 #include "../config.h"
 
 //#define LSBFIRST 1
-#define REVISION "H2TT0002"  // 버전 정보
-#define SMARTCONFIG_WAIT "SC--0000"   // SmartConfig 대기 표시
-#define SMARTCONFIG_DONE "SC--DonE"  // SmartConfig 완료 표시
+#define SMARTCONFIG_WAIT "SC__0000"   // SmartConfig 대기 표시
+#define SMARTCONFIG_DONE "SC__DonE"  // SmartConfig 완료 표시
 #define TM_ACTIVATE  0x8F // Start up
 #define TM_WRITE_LOC 0x44 // Write to a location
 #define TM_WRITE_INC 0x40 // Incremental write
@@ -18,25 +17,28 @@
 #define TM_DISPLAY_SIZE 10 //size of display
 #define TM_READ_KEY 0x42
 
-// 7세그먼트 테이블 (0-9, A-Z, a-z)
+// 7세그먼트 테이블 (0-9, A-Z 중복, 특수문자, a-z)
+// 인덱스: 0-9(숫자), 10-35(A-Z), 36-47(특수문자), 48-73(a-z)
 const uint8_t TM1638Display::DIGITS_TABLE[] = {
   0x3F, /* 0 */   0x06, /* 1 */   0x5B, /* 2 */   0x4F, /* 3 */
   0x66, /* 4 */   0x6D, /* 5 */   0x7D, /* 6 */   0x07, /* 7 */
   0x7F, /* 8 */   0x6F, /* 9 */   0x77, /* A */   0x7C, /* B */
   0x39, /* C */   0x5E, /* D */   0x79, /* E */   0x71, /* F */
-  0x3D, /* G */   0x76, /* H */   0x30, /* I */   0x1E, /* J */
-  0x75, /* K */   0x38, /* L */   0x15, /* M */   0x37, /* N */
-  0x3F, /* O */   0x73, /* P */   0x6B, /* Q */   0x33, /* R */
-  0x6D, /* S */   0x78, /* T */   0x3E, /* U */   0x3E, /* V */
-  0x2A, /* W */   0x76, /* X */   0x6E, /* Y */   0x5B, /* Z */
-  0x39, /* [ */   0x64, /* \ */   0x0F, /* ] */   0x23, /* ^ */
-  0x08, /* _ */   0x02, /* ` */   0x5F, /* a */   0x7C, /* b */
-  0x58, /* c */   0x5E, /* d */   0x7B, /* e */   0x71, /* f */
-  0x6F, /* g */   0x74, /* h */   0x10, /* i */   0x0C, /* j */
-  0x75, /* k */   0x30, /* l */   0x14, /* m */   0x54, /* n */
-  0x5C, /* o */   0x73, /* p */   0x67, /* q */   0x50, /* r */
-  0x6D, /* s */   0x78, /* t */   0x1C, /* u */   0x1C, /* v */
-  0x14, /* w */   0x76, /* x */   0x6E, /* y */   0x5B, /* z */
+  0x3D, /* G */   0x77, /* A */   0x7C, /* B */   0x39, /* C */
+  0x5E, /* D */   0x79, /* E */   0x71, /* F */   0x3D, /* G */
+  0x76, /* H */   0x30, /* I */   0x1E, /* J */   0x75, /* K */
+  0x38, /* L */   0x15, /* M */   0x37, /* N */   0x3F, /* O */
+  0x73, /* P */   0x6B, /* Q */   0x33, /* R */   0x6D, /* S */
+  0x78, /* T */   0x3E, /* U */   0x3E, /* V */   0x2A, /* W */
+  0x76, /* X */   0x6E, /* Y */   0x5B, /* Z */   0x39, /* [ */
+  0x64, /* \ */   0x0F, /* ] */   0x23, /* ^ */   0x08, /* _ */
+  0x02, /* ` */   0x5F, /* a */   0x7C, /* b */   0x58, /* c */
+  0x5E, /* d */   0x7B, /* e */   0x71, /* f */   0x6F, /* g */
+  0x74, /* h */   0x10, /* i */   0x0C, /* j */   0x75, /* k */
+  0x30, /* l */   0x14, /* m */   0x54, /* n */   0x5C, /* o */
+  0x73, /* p */   0x67, /* q */   0x50, /* r */   0x6D, /* s */
+  0x78, /* t */   0x1C, /* u */   0x1C, /* v */   0x14, /* w */
+  0x76, /* x */   0x6E, /* y */   0x5B, /* z */
 };
 
 TM1638Display::TM1638Display(uint8_t pinSTB, uint8_t pinCLK, uint8_t pinDIO, uint8_t brightness)
@@ -171,25 +173,16 @@ void TM1638Display::setNumber(uint8_t pos, int num, uint8_t len) {
 // }
 void TM1638Display::setString(uint8_t pos, const char* string, uint8_t len) {
   for (int i = 0; i < len; i++) {
-    char c = string[i];
-    uint8_t index = 0;
-    
-    if (c >= '0' && c <= '9') {
-      // 숫자 0-9 → 인덱스 0-9
-      index = c - '0';
-    } else if (c >= 'A' && c <= 'Z') {
-      // 대문자 A-Z → 인덱스 10-35
-      index = c - 'A' + 10;
-    } else if (c >= 'a' && c <= 'z') {
-      // 소문자 a-z → 인덱스 36-61
-      index = c - 'a' + 36;
+    // ASCII 범위 체크: 0x30('0') ~ 0x7a('z')
+    if (string[i] < 0x30 || string[i] > 0x7a) {
+      _displaySegment[pos + i] = 0;  // 범위 밖이면 공백
     } else {
-      // 그 외 문자는 공백
-      _displaySegment[pos + i] = 0;
-      continue;
+      // 테이블 인덱스 = ASCII 코드 - 48
+      // '0'(0x30) → 0, '9'(0x39) → 9
+      // 'A'(0x41) → 17, 'Z'(0x5A) → 42
+      // 'a'(0x61) → 49, 'z'(0x7a) → 74
+      _displaySegment[pos + i] = DIGITS_TABLE[string[i] - 48];
     }
-    
-    _displaySegment[pos + i] = DIGITS_TABLE[index];
   }
 }
 
@@ -380,7 +373,7 @@ void TM1638Display::sendToDisplay() {
     else 
     {
       displayDualTemp((uint16_t)gCUR.measure_ntc_temp, gCUR.seljung_temp);
-      displayTime(gCUR.current_minute);
+      displayTime(gCUR.remaining_minute);
       if(sec_bling_flag)setDot(7,true);
       else setDot(7,false);
     }
@@ -467,36 +460,14 @@ void TM1638Display::beep() {
 }
 
 //=============================================
-// 전원 버튼 처리 함수 (디바운싱 없음)
-void TM1638Display::processPowerButton() {
-  static uint8_t last_pwr_state = HIGH;  // 이전 상태 저장
-  
-  uint8_t current_pwr_state = digitalRead(PIN_PWR_SW);
-  
-  // 상태 변화 감지 (HIGH -> LOW 또는 LOW -> HIGH)
-  if (current_pwr_state != last_pwr_state) {
-    if (current_pwr_state == LOW) {
-      // 버튼 눌림 (LOW): 파워 ON
-      gCUR.flg.soft_off = 0;
-      printf("Power Button: ON\n");
-    } else {
-      // 버튼 떼짐 (HIGH): 파워 OFF
-      gCUR.flg.soft_off = 1;
-      printf("Power Button: OFF\n");
-    }
-    last_pwr_state = current_pwr_state;
-  }
-}
-
-//=============================================
 void  TM1638Display::key_process(){
   static uint8_t ex_key=0;
   static uint16_t key_press_cnt=0;
   static unsigned long last_key_time = 0;  // 키 디바운싱용
   static unsigned long last_save_time = 0; // Flash 저장용
   static bool need_save = false;
-  static unsigned long mode_press_start = 0;  // KEY_MODE long-press 타이머
-  static bool mode_long_handled = false;      // long-press 처리 완료 플래그
+  static unsigned long pwr_press_start = 0;  // KEY_PWR long-press 타이머
+  static bool pwr_long_handled = false;      // long-press 처리 완료 플래그
   uint8_t beef_on=0;
   uint8_t idamper;
   uint8_t key = getButtons();
@@ -510,31 +481,94 @@ void  TM1638Display::key_process(){
     printf("Settings saved to flash\n");
   }
   if(gCUR.flg.soft_off){
+    // Power OFF 상태에서는 KEY_PWR만 처리 (다른 키는 무시)
+    if(key == KEY_PWR && ex_key == 0) {
+      // KEY_PWR을 처음 눌렀을 때
+      pwr_press_start = millis();
+      pwr_long_handled = false;
+      ex_key = key;
+    } else if(key == KEY_PWR && ex_key == KEY_PWR) {
+      // KEY_PWR을 계속 누르고 있을 때: 3초 체크
+      if (!pwr_long_handled && (millis() - pwr_press_start >= 3000)) {
+        // 3초 long-press: 즉시 SmartConfig 진입
+        extern bool smartconfig_request;
+        smartconfig_request = true;
+        pwr_long_handled = true;
+        beep();  // 즉시 피드백
+        printf("KEY_PWR Long Press (Power OFF) - SmartConfig Request\n");
+      }
+    } else if(key == KEY_NULL && ex_key == KEY_PWR) {
+      // KEY_PWR을 뗐을 때
+      if (!pwr_long_handled) {
+        // Long press 처리 안된 경우 = Short press: Power ON
+        gCUR.flg.soft_off = 0;
+        gCUR.error_info.data = 0;  // 에러 클리어
+        
+        // 남은 시간 체크: 00:00이면 DRY_FINISH, 아니면 DRY_RUN
+        if (gCUR.remaining_minute == 0) {
+          gCUR.dry_state = DRY_FINISH;
+          printf("KEY_PWR Short Press - Power ON, Time is 00:00, DRY_STATE: DRY_FINISH\n");
+        } else {
+          gCUR.dry_state = DRY_RUN;
+          printf("KEY_PWR Short Press - Power ON, DRY_STATE: DRY_RUN\n");
+        }
+        
+        beep();
+        // Flash에 저장 예약
+        last_save_time = millis();
+        need_save = true;
+      }
+      ex_key = 0;
+      pwr_press_start = 0;
+      pwr_long_handled = false;
+    } else if(key == KEY_NULL) {
+      ex_key = 0;
+      pwr_press_start = 0;
+      pwr_long_handled = false;
+    }
     return;
   }
   if(key ==KEY_NULL) {
+    // Power ON 상태에서 키를 뗐을 때
+    if(ex_key == KEY_PWR && !pwr_long_handled) {
+      // Long press 처리 안된 경우 = Short press: Power OFF
+      gCUR.flg.soft_off = 1;
+      beep();
+      printf("KEY_PWR Short Press - Power OFF\n");
+      // Flash에 저장 예약
+      last_save_time = millis();
+      need_save = true;
+      // 주의: DRY_RUN → DRY_COOL 전환은 onSecondElapsed()에서 처리됨
+    }
     ex_key=0; key_press_cnt=0;
-    mode_press_start = 0;  // KEY_MODE 타이머 리셋
-    mode_long_handled = false;
+    pwr_press_start = 0;  // KEY_PWR 타이머 리셋
+    pwr_long_handled = false;
     return;
   }
   
   // 키 디바운싱: 같은 키를 누르고 있으면 일정 시간 대기
+  // 단, KEY_PWR은 long press 감지를 위해 예외 처리
   if(ex_key == key) {
     key_press_cnt++;
-    // 처음 누른 후 300ms 대기, 이후 100ms마다 반복
-    if(key_press_cnt == 1) {
-      last_key_time = millis();
-      // 첫 입력은 바로 처리 (아래로 계속)
+    // KEY_PWR은 long press 감지를 위해 매번 체크
+    if(key == KEY_PWR) {
+      // KEY_PWR은 디바운싱 없이 바로 처리
     } else {
-      unsigned long elapsed = millis() - last_key_time;
-      if(elapsed < 300) {
-        return;  // 첫 입력 후 300ms 대기
-      } else if((elapsed - 300) % 100 < 20) {
-        // 300ms 이후부터 100ms마다 반복
+      // 다른 키들은 디바운싱 적용
+      // 처음 누른 후 300ms 대기, 이후 100ms마다 반복
+      if(key_press_cnt == 1) {
         last_key_time = millis();
+        // 첫 입력은 바로 처리 (아래로 계속)
       } else {
-        return;  // 아직 반복 타이밍 아님
+        unsigned long elapsed = millis() - last_key_time;
+        if(elapsed < 300) {
+          return;  // 첫 입력 후 300ms 대기
+        } else if((elapsed - 300) % 100 < 20) {
+          // 300ms 이후부터 100ms마다 반복
+          last_key_time = millis();
+        } else {
+          return;  // 아직 반복 타이밍 아님
+        }
       }
     }
   } else {
@@ -550,30 +584,19 @@ void  TM1638Display::key_process(){
 
   switch(key){
     case KEY_123:
-//       if(ex_key==key) key_press_cnt++;
-//       else key_press_cnt=0;
-//       if(key_press_cnt>10){
-//        beef_on=1;
-//        key_press_cnt=0;
-// #ifdef DEBUG
-//       printf("KEY_123!!!\r\n");
-// #endif
-//       err_release_flag=1;
-// //        if(err_release_flag) gCUR.flg.process_seq=PROCESS_ING;
-//       }
       break;
     case KEY_TEMP_UP:
     case KEY_TEMP_DN:
-      mode_press_start = 0;  // KEY_MODE 타이머 리셋
-      mode_long_handled = false;
+      pwr_press_start = 0;  // KEY_PWR 타이머 리셋
+      pwr_long_handled = false;
       
       // 온도 설정 변경
       lval = gCUR.seljung_temp;
       lval = (key == KEY_TEMP_UP) ? lval + 1 : lval - 1;
       
       // 범위 제한 (0~70도)
-      if (lval > 70) lval = 70;
-      if (lval < 0) lval = 0;
+      if (lval > MAX_TEMPERATURE) lval = MAX_TEMPERATURE;
+      if (lval < MIN_TEMPERATURE) lval = MIN_TEMPERATURE;
       
       gCUR.seljung_temp = lval;
       
@@ -587,12 +610,12 @@ void  TM1638Display::key_process(){
 
     case KEY_TIME_UP:
     case KEY_TIME_DN:
-      mode_press_start = 0;  // KEY_MODE 타이머 리셋
-      mode_long_handled = false;
+      pwr_press_start = 0;  // KEY_PWR 타이머 리셋
+      pwr_long_handled = false;
       
       {
         // 시간 설정 변경 (30분 단위, 00분 또는 30분으로 정렬)
-        lval = gCUR.current_minute;
+        lval = gCUR.remaining_minute;
         
         // 현재 값을 30분 단위로 정렬 (올림)
         int remainder = lval % 30;
@@ -604,36 +627,50 @@ void  TM1638Display::key_process(){
         lval = (key == KEY_TIME_UP) ? lval + 30 : lval - 30;
         
         // 범위 제한 (0~12000분)
-        if (lval > 12000) lval = 12000;
-        if (lval < 0) lval = 0;
+        if (lval > MAX_SET_TIME) lval = MAX_SET_TIME;
+        if (lval < MIN_SET_TIME) lval = MIN_SET_TIME;
         
-        gCUR.current_minute = lval;
+        gCUR.remaining_minute = lval;
+        
+        // 상태 전환: 시간이 0보다 크면 DRY_RUN, 0이면 DRY_FINISH
+        if (gCUR.remaining_minute > 0) {
+          if (gCUR.dry_state == DRY_FINISH) {
+            gCUR.dry_state = DRY_RUN;
+            printf("Time set > 0: DRY_FINISH -> DRY_RUN\n");
+          }
+        } else {
+          if (gCUR.dry_state == DRY_RUN) {
+            gCUR.dry_state = DRY_FINISH;
+            printf("Time set = 0: DRY_RUN -> DRY_FINISH\n");
+          }
+        }
         
         // 3초 후 Flash 저장 예약
         last_save_time = millis();
         need_save = true;
         
         beep();  // 부저 소리
-        printf("Time set: %d min\n", gCUR.current_minute);
+        printf("Time set: %d min\n", gCUR.remaining_minute);
       }
       break;
-    case KEY_MODE:
-      // 3초 이상 long-press 시 SmartConfig 요청
-      if (mode_press_start == 0) {
-        mode_press_start = millis();
-        mode_long_handled = false;
-      } else if (!mode_long_handled && (millis() - mode_press_start >= 3000)) {
-        // 3초 long-press 감지
+    case KEY_PWR:
+      // 키를 처음 눌렀을 때 타이머 시작
+      if (pwr_press_start == 0) {
+        pwr_press_start = millis();
+        pwr_long_handled = false;
+      } else if (!pwr_long_handled && (millis() - pwr_press_start >= 3000)) {
+        // 3초 long-press: 즉시 SmartConfig 진입
         extern bool smartconfig_request;
         smartconfig_request = true;
-        mode_long_handled = true;
-        beep();  // 소리로 알림
-        printf("KEY_MODE Long Press - SmartConfig Request\n");
+        pwr_long_handled = true;
+        beep();  // 즉시 피드백
+        printf("KEY_PWR Long Press (Power ON) - SmartConfig Request\n");
       }
+      // Short press는 키를 뗄 때 처리 (위의 KEY_NULL 블록)
       break;
     case KEY_DAMPER:
-      mode_press_start = 0;  // KEY_MODE 타이머 리셋
-      mode_long_handled = false;
+      pwr_press_start = 0;  // KEY_PWR 타이머 리셋
+      pwr_long_handled = false;
       
       // 댐퍼 자동 모드 토글 (0: 수동, 1: 자동)
       idamper = gCUR.auto_damper;
@@ -673,19 +710,8 @@ void  TM1638Display::key_process(){
 }
 
 
-#define ADC_SENSITIVITY 0.01f
-float TM1638Display::get_m0_filter(int adc)
-{
-  static float m0_value;
-  m0_value=(m0_value*(1-ADC_SENSITIVITY))+(adc*ADC_SENSITIVITY);
-  return m0_value;
-}
-
 uint8_t TM1638Display::getButtons(void)
 {
-  // 전원 버튼 처리 (디바운싱 없음)
-  processPowerButton();
-  avr_NTC1 = get_m0_filter(analogReadMilliVolts(PIN_NTC1)); 
   KEY_BUF key_buf;
   uint8_t key=KEY_NULL;
 ///////////////////////////////////
@@ -742,7 +768,7 @@ uint8_t TM1638Display::getButtons(void)
      key=KEY_DAMPER;
   }
   if(key_buf.b.b10){
-    key=KEY_MODE;
+    key=KEY_PWR;
   }
 #if 1
 
@@ -751,7 +777,6 @@ uint8_t TM1638Display::getButtons(void)
     key=KEY_123;
     printf("#KEY_123\r\n");
   }
-  // PWR_KEY는 이제 하드웨어 스위치(PIN_PWR_SW)로 처리됨
  #endif 
   return key;
 }

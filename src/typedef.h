@@ -8,6 +8,12 @@ typedef enum _FND_STATE{
   FND_MQTT_RECV_ID,
 }FND_STATE;
 
+typedef enum _DRY_STATE{
+  DRY_RUN=0,      // 건조 운전 중 (히터 ON, 팬 ON)
+  DRY_COOL,       // 냉각 모드 (히터 OFF, 팬 ON, COOLING_TIME 동안)
+  DRY_FINISH,     // 완료 (히터 OFF, 팬 OFF)
+}DRY_STATE;
+
 typedef union _RELAY_DATA {
     struct {
       uint8_t RY1:1;//compressor
@@ -71,12 +77,6 @@ typedef union _ERROR_INFO
   uint8_t data;
 }ERROR_INFO;
 
-typedef union _EEPROM_DATA
-{
-  uint8_t  data[4];
-  uint32_t d32;
-}EEPROM_DATA;
-
 typedef struct
 {
   uint8_t temperature;
@@ -134,8 +134,9 @@ typedef struct
   float sht30_humidity;       // SHT30 습도 센서 값
 
   uint16_t system_sec;        // 시스템 초 카운터
-  uint16_t current_minute;    // 현재 경과 시간(분)
+  uint16_t remaining_minute;  // 남은 시간(분)
   uint16_t fan_current;       // 팬 전류 값
+  float avr_NTC1;             // NTC1 ADC 필터링된 값 (mV)
   
   RELAY_DATA relay_state;     // 릴레이 상태 (RY1~RY8)
   LED_INFO led;               // LED 상태
@@ -144,6 +145,7 @@ typedef struct
   ERROR_INFO error_info;      // 에러 정보
   PUBLISH_EVENT pubEvent;     // 이벤트 상태
   FND_STATE fnd_state;        // FND 디스플레이 상태
+  DRY_STATE dry_state;        // 건조기 상태 (DRY_RUN, DRY_COOL, DRY_FINISH)
   char mqtt_recv_id[16];      // MQTT로 받은 ID 문자열
   unsigned long mqtt_recv_time; // MQTT ID 수신 시간
 }CURRENT_DATA;

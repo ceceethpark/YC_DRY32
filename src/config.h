@@ -1,7 +1,7 @@
 // config.h  -- ESP32 건조기 컨트롤러 핀맵 & 설정
 
 #pragma once
-
+#define REVISION "H2FI0003"  // 버전 정보
 #define PIN_PWR_SW      21    // IRQ
 #define PIN_ZCIRQ       23    // IRQ
 #define PIN_OH          26    // OverHeat 감지 (HIGH=과열, LOW=정상)
@@ -38,9 +38,13 @@
 #define DEBUG_MODE  // 이 줄을 주석 해제하면 디버그 모드 (타이머 기반 콜백)
 
 // ====== 건조 제어 파라미터 (임시값) ======
-#define TARGET_TEMP_C   45.0f   // 목표 온도 (℃)
-#define TEMP_HYST       2.0f    // 히스테리시스 (±℃)
-#define CONTROL_PERIOD  1000UL  // 제어 주기 (ms)
+#define MAX_TEMPERATURE     70   // 최대 목표 온도 (℃)
+#define MIN_TEMPERATURE     0    // 히스테리시스 (네℃)
+#define MAX_SET_TIME     12000    // MAX 설정 시간 (분)
+#define MIN_SET_TIME         0    // MIN 설정 시간 (분)
+
+#define HEATER_HYSTERESIS   0.5f    // 히터 온도 히스테리시스 (네℃)
+#define CONTROL_PERIOD      1000UL  // 제어 주기 (ms)
 
 // ====== NTC 측정용 기본값 ======
 // 5K NTC (Beta=3970), 5K pull-up, 3.3V

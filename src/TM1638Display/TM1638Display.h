@@ -8,7 +8,7 @@ extern bool system_start_flag;
 
 typedef enum _KEY_MAP{
   KEY_NULL=0,
-  KEY_MODE,
+  KEY_PWR,
   KEY_TEMP_UP,
   KEY_TEMP_DN,
   KEY_TIME_UP,
@@ -110,8 +110,6 @@ public:
   void key_process();
   void sendToDisplay();// 전체 디스플레이 업데이트
   void beep();  // 부저 소리 (50ms)
-  void processPowerButton();  // 전원 버튼 처리 (디바운싱 없음)
-  float  avr_NTC1=0;
   
   // 7세그먼트 테이블 (public으로 노출)
   static const uint8_t DIGITS_TABLE[];
@@ -140,6 +138,4 @@ private:
   void displaySegments(uint8_t segment, uint16_t digit);
   void setString(uint8_t pos, const char* string, uint8_t len);
   uint8_t getButtons(void);
-  //int analogReadAndFilter_ntc1(int adcPin);
-  float get_m0_filter(int adc);
 };

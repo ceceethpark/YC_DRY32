@@ -10,13 +10,12 @@
 // 전역 변수 선언
 extern CURRENT_DATA gCUR;
 
+// 상수 정의
+#define COOLING_TIME 5  // 냉각 시간 (분)
+
 class dataClass {
 public:
     dataClass();
-    
-    // 데이터 접근 메서드
-    void setData(uint8_t index, uint16_t value);
-    uint16_t getData(uint8_t index);
     
     // 초기화
     void begin();
@@ -24,6 +23,9 @@ public:
     
     // NTC 온도 읽기
     float readNTCtempC();
+    
+    // ADC 필터링 함수
+    float get_m0_filter(int adc);
     
     // SHT30 온도/습도 읽기
     float readSHT30tempC();   // 온도 (℃)
@@ -38,11 +40,6 @@ public:
     void onSecondElapsed();
     void onMinuteElapsed();
     
-    // API 업로드 트리거
-    void triggerAPIUpload(int measureValue, const char* departureYn = "N");
-    
-
-    
     // 히터 온도 제어
     void controlHeater();
     
@@ -53,7 +50,6 @@ public:
     void checkOverheat();
     
 private:
-    uint16_t _data[16];  // 데이터 배열
     Preferences _preferences;  // Flash 저장용
     
     // 온도 필터링용
