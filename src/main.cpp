@@ -162,16 +162,16 @@ void startSmartConfig() {
   smartconfig_running = true;
   smartconfig_start_time = millis();
   
-  Serial.println("Waiting for SmartConfig (60 sec timeout)...");
+  Serial.println("Waiting for SmartConfig (30 sec timeout)...");
 }
 
 // ========== SmartConfig 처리 (loop에서 호출) ==========
 void processSmartConfig() {
   if (!smartconfig_running) return;
   
-  // 타임아웃 체크 (60초)
-  if (millis() - smartconfig_start_time > 60000) {
-    Serial.println("\nSmartConfig Timeout");
+  // 타임아웃 체크 (30초)
+  if (millis() - smartconfig_start_time > 30000) {
+    Serial.println("\nSmartConfig Timeout (30 sec)");
     WiFi.stopSmartConfig();
     smartconfig_running = false;
     gCUR.led.network = 0;
@@ -293,7 +293,7 @@ void initTimerInterrupt() {
 // ========== setup ==========
 void setup() {
   Serial.begin(115200);
-  delay(2000);
+ // delay(2000);
   
   Serial.println("\n\n===========================================");
   Serial.println("ESP32 Dryer Controller v1.1");
@@ -348,7 +348,8 @@ void setup() {
   gMQTTClient.begin();
   
   // 시스템 시작 이벤트 발행 (Power-On)
-  delay(2000);  // MQTT 연결 대기
+  //delay(2000);  // MQTT 연결 대기
+   delay(200);  // MQTT 연결 대기
   if (gMQTTClient.isConnected()) {
     // Power-On 이벤트 설정
     gCUR.pubEvent.uEvent.u16 = 0x0001;  // POWER_ON 비트

@@ -480,6 +480,9 @@ void  TM1638Display::key_process(){
     need_save = false;
     printf("Settings saved to flash\n");
   }
+  // SmartConfig 모드 중에도 일반 키 처리 (soft_off 전환 시 리부팅)
+  extern bool smartconfig_running;
+  
   if(gCUR.flg.soft_off){
     // Power OFF 상태에서는 KEY_PWR만 처리 (다른 키는 무시)
     if(key == KEY_PWR && ex_key == 0) {
@@ -501,6 +504,7 @@ void  TM1638Display::key_process(){
       // KEY_PWR을 뗐을 때
       if (!pwr_long_handled) {
         // Long press 처리 안된 경우 = Short press: Power ON
+        extern dataClass gData;
         gCUR.flg.soft_off = 0;
         gCUR.error_info.data = 0;  // 에러 클리어
         
@@ -514,9 +518,12 @@ void  TM1638Display::key_process(){
         }
         
         beep();
-        // Flash에 저장 예약
-        last_save_time = millis();
-        need_save = true;
+        
+        // Flash에 즉시 저장 후 시스템 재시작
+        printf("Saving Power ON state and Rebooting...\n");
+        gData.saveToFlash();
+        delay(100);  // 저장 완료 대기
+        ESP.restart();
       }
       ex_key = 0;
       pwr_press_start = 0;
@@ -535,6 +542,17 @@ void  TM1638Display::key_process(){
       gCUR.flg.soft_off = 1;
       beep();
       printf("KEY_PWR Short Press - Power OFF\n");
+      
+      // SmartConfig 모드 중이면 Power ON 상태로 Flash 저장 후 시스템 리부팅
+      if (smartconfig_running) {
+        extern dataClass gData;
+        printf("SmartConfig running - Saving Power ON state and Rebooting\n");
+        gCUR.flg.soft_off = 0;  // Power ON 상태로 설정
+        gData.saveToFlash();     // Flash에 즉시 저장
+        delay(100);  // 저장 완료 대기
+        ESP.restart();
+      }
+      
       // Flash에 저장 예약
       last_save_time = millis();
       need_save = true;
@@ -759,10 +777,10 @@ uint8_t TM1638Display::getButtons(void)
     key=KEY_TIME_UP;
   }
   if(key_buf.b.b6){  // 0x40 예상
-    key=KEY_TEMP_DN;
+    key=KEY_TEMP_UP;
   }
   if(key_buf.b.b2){  // 0x04 예상
-    key=KEY_TEMP_UP;
+    key=KEY_TEMP_DN;
   }
   if(key_buf.b.b9){  // DAMPER 키 (b0은 노이즈)
      key=KEY_DAMPER;
