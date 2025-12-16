@@ -374,10 +374,12 @@ void setup() {
 
 // ========== loop ==========
 void loop() {
+  // 1) Always handle OTA first so packets are processed frequently
+  ArduinoOTA.handle();
+
+  // 2) Boot display handling (non-blocking)
   static unsigned long boot_display_start = millis();
   static bool boot_display_done = false;
-  
-  // 파워 ON 시 REVISION 3초 표시 후 FND_DRY_STATE로 전환
   if (!boot_display_done && gCUR.fnd_state == FND_BOOT) {
     if (millis() - boot_display_start >= 3000) {
       gCUR.fnd_state = FND_DRY_STATE;
@@ -385,86 +387,72 @@ void loop() {
       Serial.println("Boot display done - Switching to FND_DRY_STATE");
     }
   }
-  
-  // OTA 핸들링
-  ArduinoOTA.handle();
-  
-  // 네트워크 상태 LED 업데이트
-  if (WiFi.status() == WL_CONNECTED) {
-    gCUR.led.network = 1;  // 네트워크 활성화
-  } else {
-    gCUR.led.network = 0;  // 네트워크 비활성화
+
+  // 3) Periodic WiFi check (every 5s) and LED state
+  static unsigned long lastWiFiCheck = 0;
+  if (millis() - lastWiFiCheck > 5000) {
+    lastWiFiCheck = millis();
+    if (WiFi.status() == WL_CONNECTED) {
+      gCUR.led.network = 1;
+    } else {
+      gCUR.led.network = 0;
+      connectWiFi();
+    }
   }
-  
-  // 디스플레이와 키보드는 별도 Task에서 처리
-  
-  // SmartConfig 요청 체크 (TM1638Display::key_process()에서 설정)
+
+  // 4) SmartConfig (triggered elsewhere via flag)
   if (smartconfig_request) {
     smartconfig_request = false;
     Serial.println("KEY_PWR Long Press - Starting SmartConfig");
     startSmartConfig();
   }
-  
-  // SmartConfig 처리 (비블로킹)
   processSmartConfig();
   checkSmartConfigDone();
-  
-  // MQTT ID 수신 시 3초 후 FND_DRY_STATE로 복귀
+
+  // 5) MQTT ID display timeout handling
   if (gCUR.fnd_state == FND_MQTT_RECV_ID) {
     if (millis() - gCUR.mqtt_recv_time >= 3000) {
       gCUR.fnd_state = FND_DRY_STATE;
       Serial.println("MQTT ID display timeout - Switching to FND_DRY_STATE");
     }
   }
-  
-  // 1초마다 실행
+
+  // 6) Periodic flags (1s / 1min) handled quickly
   if (flag_1sec) {
     portENTER_CRITICAL(&timerMux);
     flag_1sec = false;
     portEXIT_CRITICAL(&timerMux);
-    
-    // 1초 콜백 실행
     gData.onSecondElapsed();
   }
-  
-  // 1분마다 실행
   if (flag_1min) {
     portENTER_CRITICAL(&timerMux);
     flag_1min = false;
     portEXIT_CRITICAL(&timerMux);
-    
-    // 1분 콜백 실행
     gData.onMinuteElapsed();
   }
-  
-  // NTC1 ADC 필터링 (빠른 응답을 위해 main loop에서 처리)
+
+  // 7) Fast ADC filter update (keep short)
   gCUR.avr_NTC1 = gData.get_m0_filter(analogReadMilliVolts(PIN_NTC1));
-  
-  // 네트워크 상타 LED 업데이트
-  if (WiFi.status() == WL_CONNECTED) {
-    gCUR.led.network = 1;  // 네트워크 활성화
-  } else {
-    gCUR.led.network = 0;  // 네트워크 비활성화
-  }
-  
-  // MQTT loop (재연결 처리 및 메시지 처리)
+
+  // 8) Update network LED based on current WiFi status
+  gCUR.led.network = (WiFi.status() == WL_CONNECTED) ? 1 : 0;
+
+  // 9) MQTT background processing
   gMQTTClient.loop();
-  
-  // MQTT 데이터 전송 (1분 주기)
-  #if ENABLE_API_UPLOAD
+
+  // 10) Periodic API/MQTT publish (non-blocking)
+#if ENABLE_API_UPLOAD
   static unsigned long lastPublishTime = 0;
   unsigned long currentTime = millis();
-  
   if (currentTime - lastPublishTime >= API_UPLOAD_INTERVAL_MS) {
     lastPublishTime = currentTime;
-    
     float tempC = gData.readNTCtempC();
     if (!isnan(tempC)) {
-      int elapsedMinutes = running_seconds / 60;
       gMQTTClient.publishData();
     }
   }
-  #endif
-  
-  delay(10);  // CPU 부하 감소
+#endif
+
+  // 11) Keep loop fast — minimal delay
+  delay(1);
 }
