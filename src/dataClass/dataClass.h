@@ -68,11 +68,16 @@ private:
     uint16_t _cooling_minutes;    // 냉각 남은 시간 (분)
     bool _fan_started;            // 팬 시작 플래그
     uint16_t _fan_start_delay;    // 팬 시작 지연 카운터 (초)
+    uint8_t _prepare_seconds;     // DRY_PREPARE 카운트다운 (초)
     
     // 팬 전류 감시용
     uint16_t _fan_error_count;    // 팬 에러 카운터
     void measure_fan_current();
     void measureAndFilterTemp(); // 온도 측정 및 필터링
+    void heaterOn(uint8_t on);  // 히터 ON/OFF 제어
+    void fanOn(uint8_t on);  // 팬 ON/OFF 제어
+    void beep(uint16_t duration_ms); // 부저 울리기
+    void damperOpen(uint8_t open); // 댐퍼 열기/닫기 제어
 };
 
 #endif // DATACLASS_H

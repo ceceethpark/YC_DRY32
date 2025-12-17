@@ -31,7 +31,8 @@ dataClass::dataClass() {
     _cooling_mode = false;
     _cooling_minutes = 0;
     _fan_started = false;
-    _fan_start_delay = 5;  // 5초 후 팬 시작
+    _fan_start_delay = 2;  // 2초 후 팬 시작
+    _prepare_seconds = 0;
     
     // 팬 전류 감시 초기화
     _fan_error_count = 0;
@@ -67,7 +68,7 @@ void dataClass::saveToFlash() {
     _preferences.putUChar("dry_state", (uint8_t)gCUR.dry_state);  // DRY_STATE 저장
     
     _preferences.end();
-    const char* state_str[] = {"DRY_RUN", "DRY_COOL", "DRY_FINISH"};
+    const char* state_str[] = {"DRY_PREPARE", "DRY_RUN", "DRY_COOL", "DRY_FINISH"};
     printf("Data saved to flash - Power: %s, State: %s\n", 
            gCUR.flg.soft_off ? "OFF" : "ON",
            state_str[gCUR.dry_state]);
@@ -110,7 +111,7 @@ void dataClass::loadFromFlash() {
         digitalWrite(PIN_DAMP, LOW);
     }
     
-    const char* state_str[] = {"DRY_RUN", "DRY_COOL", "DRY_FINISH"};
+    const char* state_str[] = {"DRY_PREPARE", "DRY_RUN", "DRY_COOL", "DRY_FINISH"};
     printf("Data loaded from flash - Time: %d min, Temp: %d C, Damper: %s, Power: %s, State: %s\n", 
            gCUR.remaining_minute, gCUR.seljung_temp, 
            gCUR.auto_damper ? "AUTO" : "MANUAL",
@@ -138,20 +139,19 @@ void dataClass::measureAndFilterTemp() {
 void dataClass::controlHeater() {
     // 에러 발생 시 히터 제어 안함 (안전 우선)
     if (gCUR.error_info.data != 0) {
-        digitalWrite(PIN_HEATER, LOW);
-        gCUR.relay_state.RY2 = 0;  // 히터 OFF
+        // digitalWrite(PIN_HEATER, LOW);
+        // gCUR.relay_state.RY2 = 0;  // 히터 OFF
+        heaterOn(0); // 히터 OFF
         return;
     }
     
     // 냉각 모드이거나 타이머가 0이면 히터 제어 안함
     if (_cooling_mode || gCUR.remaining_minute == 0) {
-        digitalWrite(PIN_HEATER, LOW);
-        gCUR.relay_state.RY2 = 0;  // 히터 OFF
-        
-        // 댑퍼 자동 모드일 때: 히터 OFF = 댑퍼 열림(0)
+        heaterOn(0); // 히터 OFF
+        // 댑퍼 자동 모드일 때: 히터 OFF = 댐퍼 열림(0)
         if (gCUR.auto_damper) {
             digitalWrite(PIN_DAMP, LOW);
-            gCUR.relay_state.RY4 = 0;  // 댑퍼 열림
+            gCUR.relay_state.RY4 = 0;  // 댐퍼 열림
             gCUR.led.damper_open = 1;
             gCUR.led.damper_close = 0;
         }
@@ -176,9 +176,8 @@ void dataClass::controlHeater() {
     // 설정값 녤HEATER_HYSTERESIS 범위 내에서는 현재 상태 유지 (히스테리시스)
     
     // 히터 릴레이 제어 (GPIO 5)
-    digitalWrite(PIN_HEATER, heater_on ? HIGH : LOW);
-    gCUR.relay_state.RY2 = heater_on ? 1 : 0;  // 히터 상태 기록
-    
+    heaterOn(heater_on); // 히터 상태 캡슐화 함수 호출
+
     // 댓퍼 자동 모드일 때: 히터 연동 제어
     if (gCUR.auto_damper) {
         if (heater_on) {
@@ -228,22 +227,15 @@ void dataClass::onSecondElapsed() {
             saveToFlash();  // Flash에 저장
             printf("Power OFF: DRY_RUN -> DRY_FINISH\n");
         }
-        
-        digitalWrite(PIN_HEATER, LOW);
-        gCUR.relay_state.RY2 = 0;  // 히터 OFF
-        digitalWrite(PIN_FAN, LOW);
-        gCUR.relay_state.RY3 = 0;  // 팬 OFF
-               
-        digitalWrite(PIN_DAMP, LOW); // 댐퍼 열림 (안전)
-        gCUR.relay_state.RY4 = 0;  // 댐퍼 열림
-        gCUR.led.damper_open = 1;
-        gCUR.led.damper_close = 0;
+        heaterOn(0); // 히터 OFF
+        fanOn(0);    // 팬 OFF
+        damperOpen(1); // 댐퍼 열림
         return;
     }
 
     // 디버그 모드에서만 상태 출력    
     if(gCUR.fnd_state == FND_DRY_STATE){
-        const char* state_str[] = {"DRY_RUN", "DRY_COOL", "DRY_FINISH"};
+        const char* state_str[] = {"DRY_PREPARE", "DRY_RUN", "DRY_COOL", "DRY_FINISH"};
         printf("onSecondElapsed system_sec[%d] Remaining_minute[%d] DRY_STATE[%s]\n", gCUR.system_sec,gCUR.remaining_minute, state_str[gCUR.dry_state]);
         printf("NTC: %.1f℃ | SHT30: %.1f℃, %.1f%%, fan current: %d\n", gCUR.measure_ntc_temp, gCUR.sht30_temp, gCUR.sht30_humidity,gCUR.fan_current);
     }
@@ -265,28 +257,47 @@ void dataClass::onSecondElapsed() {
     // 에러 발생 시 제어 루프 중단 (안전 동작 + 부저)
     if (gCUR.error_info.data != 0) {
         // 안전 동작: 히터와 팬 즉시 OFF
-        digitalWrite(PIN_HEATER, LOW);
-        gCUR.relay_state.RY2 = 0;  // 히터 OFF
-        digitalWrite(PIN_FAN, LOW);
-        gCUR.relay_state.RY3 = 0;  // 팬 OFF
-        
+        heaterOn(0); // 히터 OFF
+        fanOn(0);    // 팬 OFF
+ 
         // 댐퍼 열림 (안전)
-        digitalWrite(PIN_DAMP, LOW);
-        gCUR.relay_state.RY4 = 0;  // 댐퍼 열림
-        gCUR.led.damper_open = 1;
-        gCUR.led.damper_close = 0;
-        
+         damperOpen(1); // 댐퍼 열림
+        // digitalWrite(PIN_DAMP, LOW);
+        // gCUR.relay_state.RY4 = 0;  // 댐퍼 열림
+        // gCUR.led.damper_open = 1;
+        // gCUR.led.damper_close = 0;
+    
         // 모든 에러에 대해 1초마다 부저 울림
-        digitalWrite(PIN_BEEP, HIGH);
-        delay(50);
-        digitalWrite(PIN_BEEP, LOW);
-        
+        beep(50); // 50ms ON
         printf("ERROR DETECTED - Control loop stopped (error_info: 0x%02X)\n", gCUR.error_info.data);
         return;  // 에러 발생 시 제어 중단
     }
     
     // DRY_STATE에 따른 제어
     switch (gCUR.dry_state) {
+        case DRY_PREPARE:
+            // 준비 상태: 10초간 동작 후 DRY_RUN으로 전환
+            if (_prepare_seconds == 0) {
+                _prepare_seconds = 10; // 준비 시간 10초 설정
+                // Ensure outputs in prepare state
+                heaterOn(0); // 히터 OFF
+                fanOn(1);    // 팬 ON
+                printf("DRY_PREPARE: starting 10s prepare\r\n");
+            }
+            // 카운트다운
+            if (_prepare_seconds > 0) {
+                _prepare_seconds--;
+                printf("DRY_PREPARE: %d seconds remaining\n", _prepare_seconds);
+                if (_prepare_seconds == 0) {
+                    // 준비 완료 → RUN 상태로 전환
+                    gCUR.dry_state = DRY_RUN;
+                    // Reset fan start delay so fan starts immediately in RUN
+                    _fan_started = false;
+                    _fan_start_delay = 0;
+                    printf("DRY_PREPARE complete -> DRY_RUN\n");
+                }
+            }
+            break;
         case DRY_RUN:
             // 팬 시작 지연 처리 (부팅 시에만 2초 지연, 상태 전환 시에는 즉시)
             if (!_fan_started) {
@@ -312,19 +323,17 @@ void dataClass::onSecondElapsed() {
             
         case DRY_COOL:
             // 냉각 모드: 히터 OFF, 팬 ON 유지
-            digitalWrite(PIN_HEATER, LOW);
-            gCUR.relay_state.RY2 = 0;  // 히터 OFF
-            digitalWrite(PIN_FAN, HIGH);
-            gCUR.relay_state.RY3 = 1;  // 팬 ON
+            heaterOn(0); // 히터 OFF
+            fanOn(1);    // 팬 ON
             printf("DRY_COOL: Heater OFF, Fan ON (Remaining: %d min)\n", _cooling_minutes);
             break;
             
         case DRY_FINISH:
             // 완료: 히터 OFF, 팬 OFF
-            digitalWrite(PIN_HEATER, LOW);
-            gCUR.relay_state.RY2 = 0;  // 히터 OFF
-            digitalWrite(PIN_FAN, LOW);
-            gCUR.relay_state.RY3 = 0;  // 팬 OFF
+            heaterOn(0); // 히터 OFF  
+            fanOn(0);    // 팬 OFF  
+            damperOpen(1); // 댐퍼 열림
+            printf("DRY_FINISH: Heater OFF, Fan OFF, Damper OPEN\r\n");
             break;
     }
 }
@@ -376,10 +385,8 @@ void dataClass::checkOverheat() {
         }
         
         // FAN과 HEATER 즉시 OFF
-        digitalWrite(PIN_FAN, LOW);
-        gCUR.relay_state.RY3 = 0;  // 팬 OFF
-        digitalWrite(PIN_HEATER, LOW);
-        gCUR.relay_state.RY2 = 0;  // 히터 OFF
+        heaterOn(0); // 히터 OFF
+        fanOn(0);    // 팬 OFF
         
         // 댓퍼 열림 (안전)
         digitalWrite(PIN_DAMP, LOW);
@@ -387,10 +394,8 @@ void dataClass::checkOverheat() {
         gCUR.led.damper_open = 1;
         gCUR.led.damper_close = 0;
         
-        // 1초마다 비프음 발생 (50ms ON)
-        digitalWrite(PIN_BEEP, HIGH);
-        delay(50);
-        digitalWrite(PIN_BEEP, LOW);
+         beep(50);// 1초마다 비프음 발생 (50ms ON)
+       
     } else {
         // 정상 상태
         if (gCUR.error_info.thermo_state) {
@@ -536,4 +541,42 @@ float dataClass::readSHT30humidity() {
     if (humidity > 100.0f) humidity = 100.0f;
     
     return humidity;
+}
+
+void dataClass::heaterOn(uint8_t on) {
+    if(on) {
+            digitalWrite(PIN_HEATER, HIGH);
+            gCUR.relay_state.RY2 = 1;  // 히터 ON
+    }else{
+            digitalWrite(PIN_HEATER, LOW);
+            gCUR.relay_state.RY2 = 0;  // 히터 OFF
+    }
+}
+
+void dataClass::fanOn(uint8_t on) {
+    if(on) {
+            digitalWrite(PIN_FAN, HIGH);
+            gCUR.relay_state.RY3 = 1;  // 팬 ON
+    }else{
+        digitalWrite(PIN_FAN, LOW);
+        gCUR.relay_state.RY3 = 0;  // 팬 OFF
+    }
+}
+void dataClass::beep(uint16_t duration_ms) {
+    digitalWrite(PIN_BEEP, HIGH);
+    delay(duration_ms);
+    digitalWrite(PIN_BEEP, LOW);
+}
+void dataClass::damperOpen(uint8_t open) {
+    if(open) {
+        digitalWrite(PIN_DAMP, LOW);
+        gCUR.relay_state.RY4 = 0;  // 댐퍼 열림
+        gCUR.led.damper_open = 1;
+        gCUR.led.damper_close = 0;
+    }else{
+        digitalWrite(PIN_DAMP, HIGH);
+        gCUR.relay_state.RY4 = 1;  // 댐퍼 닫힘
+        gCUR.led.damper_open = 0;
+        gCUR.led.damper_close = 1;
+    }   
 }

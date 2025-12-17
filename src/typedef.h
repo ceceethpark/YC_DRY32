@@ -9,7 +9,8 @@ typedef enum _FND_STATE{
 }FND_STATE;
 
 typedef enum _DRY_STATE{
-  DRY_RUN=0,      // 건조 운전 중 (히터 ON, 팬 ON)
+  DRY_PREPARE=0,
+  DRY_RUN,      // 건조 운전 중 (히터 ON, 팬 ON)
   DRY_COOL,       // 냉각 모드 (히터 OFF, 팬 ON, COOLING_TIME 동안)
   DRY_FINISH,     // 완료 (히터 OFF, 팬 OFF)
 }DRY_STATE;
