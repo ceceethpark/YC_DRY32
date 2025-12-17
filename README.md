@@ -52,10 +52,10 @@ ESP32 기반 건조기 제어 시스템
 | GPIO 25       | 10     | LCD CS         | pLCD_CS      | 출력       | ADC2_CH8  | LCD 제어                      |
 | GPIO 26       | 11     | 과열 감지      | pOH_CTRL     | 입력       | ADC2_CH9  | HIGH=과열, LOW=정상           |
 | GPIO 27       | 12     | FND STB        | FND_STB      | 출력       | ADC2_CH7  | TM1638 제어                   |
-| GPIO 14       | 13     | FND 클럭       | FND_CLK      | 출력       | ADC2_CH6  | TM1638 제어                   |
+| GPIO 14       | 13     | FND CLK       | FND_CLK      | 출력       | ADC2_CH6  | TM1638 제어                   |
 | GPIO 12       | 14     | (예비)         | -            | 입출력     | ADC2_CH5  | ⚠️ Boot 시 LOW 유지          |
 | GPIO 13       | 16     | LCD SCK        | pLCD_SCK     | 출력       | ADC2_CH4  | LCD SPI 클럭                  |
-| GPIO 15       | 23     | FND 데이터     | FND_DIO      | 출력       | ADC2_CH3  | ⚠️ Boot 시 HIGH 유지         |
+| GPIO 15       | 23     | FND DIO        | FND_DIO      | 출력       | ADC2_CH3  | ⚠️ Boot 시 HIGH 유지         |
 | GPIO 2        | 24     | (예비)         | -            | 입출력     | ADC2_CH2  | ⚠️ Boot 시 LOW 유지          |
 | GPIO 0        | 25     | (예비)         | -            | 입출력     | ADC2_CH1  | ⚠️ Boot 모드 선택 핀         |
 | GPIO 4        | 26     | AUX2 출력      | pAU2         | 출력       | ADC2_CH0  | 보조 출력                     |
@@ -71,7 +71,7 @@ ESP32 기반 건조기 제어 시스템
 | GPIO 23       | 37     | Zero-Cross     | pZC_IRQ      | 입력(IRQ)  | -         | AC 주파수 감지                |
 | EN            | 3      | Reset          | EN           | 입력       | -         | 리셋 버튼 (10K Pull-up)       |
 
-### 핀 사용 통계
+### 핀 사용
 
 **출력 핀 (12개):**
 - 릴레이/제어: GPIO 5(히터), GPIO 18(팬), GPIO 19(댐퍼), GPIO 17/16/4(AUX)

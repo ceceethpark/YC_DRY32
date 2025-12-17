@@ -31,7 +31,7 @@ dataClass::dataClass() {
     _cooling_mode = false;
     _cooling_minutes = 0;
     _fan_started = false;
-    _fan_start_delay = 2;  // 2초 후 팬 시작
+    _fan_start_delay = 5;  // 5초 후 팬 시작
     
     // 팬 전류 감시 초기화
     _fan_error_count = 0;
