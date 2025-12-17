@@ -131,7 +131,7 @@ void dataClass::measureAndFilterTemp() {
     gCUR.measure_ntc_temp = readNTCtempC();
     gCUR.sht30_temp = readSHT30tempC();
     gCUR.sht30_humidity = readSHT30humidity();
-    printf("NTC: %.1f℃ | SHT30: %.1f℃, %.1f%%, fan current: %d\n", gCUR.measure_ntc_temp, gCUR.sht30_temp, gCUR.sht30_humidity,gCUR.fan_current);
+//    printf("NTC: %.1f℃ | SHT30: %.1f℃, %.1f%%, fan current: %d\n", gCUR.measure_ntc_temp, gCUR.sht30_temp, gCUR.sht30_humidity,gCUR.fan_current);
 }
 
 // 히터 온도 제어 (1도 히스테리시스) + 댐퍼 자동 연동
@@ -241,15 +241,12 @@ void dataClass::onSecondElapsed() {
         return;
     }
 
-    // if (system_start_flag) {
-    //     printf("onSecondElapsed system_sec[%d] - System starting, skip control\n", gCUR.system_sec);
-    //     checkOverheat();
-    //     return;
-    // }
-    
-    const char* state_str[] = {"DRY_RUN", "DRY_COOL", "DRY_FINISH"};
-    printf("onSecondElapsed system_sec[%d] Remaining_minute[%d] DRY_STATE[%s]\n", gCUR.system_sec,gCUR.remaining_minute, state_str[gCUR.dry_state]);
-   
+    // 디버그 모드에서만 상태 출력    
+    if(gCUR.fnd_state == FND_DRY_STATE){
+        const char* state_str[] = {"DRY_RUN", "DRY_COOL", "DRY_FINISH"};
+        printf("onSecondElapsed system_sec[%d] Remaining_minute[%d] DRY_STATE[%s]\n", gCUR.system_sec,gCUR.remaining_minute, state_str[gCUR.dry_state]);
+        printf("NTC: %.1f℃ | SHT30: %.1f℃, %.1f%%, fan current: %d\n", gCUR.measure_ntc_temp, gCUR.sht30_temp, gCUR.sht30_humidity,gCUR.fan_current);
+    }
     // 상태 일관성 체크: remaining_minute과 dry_state 동기화
     if (gCUR.dry_state == DRY_FINISH && gCUR.remaining_minute > 0) {
         // 시간이 남았는데 FINISH 상태 → RUN으로 전환
